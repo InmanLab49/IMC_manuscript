@@ -1,0 +1,2821 @@
+---
+title: "Cytomapper test"
+author: "Zoya Qaiyum"
+date: "2023-04-12"
+output: word_document
+---
+
+
+
+Downloading the latest version of Cytomapper (v1.11.2):
+```{r}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+    
+BiocManager::install(c("EBImage", "SingleCellExperiment"))
+
+# install.packages("remotes")
+
+remotes::install_github("BodenmillerGroup/cytomapper", build_vignettes = TRUE, dependencies = TRUE)
+```
+
+
+```{r}
+if (!requireNamespace("remotes", quietly = TRUE))
+    install.packages("remotes")
+
+remotes::install_github("BodenmillerGroup/imcRtools")
+```
+
+
+##Generating single-cell data from images (Section 5.4)##
+
+**Reading in masks and images (5.4)**
+
+*Reading in masks*
+
+```{r}
+#Read in masks
+
+allmasks<- loadImages("~/Documents/Aortic Valve Project/Normalized TIFFs and Segmentation Masks2/Masks", as.is = TRUE)
+allmasks
+```
+
+*Reading in images*
+
+```{r}
+#Read in images
+
+allimages<- loadImages("~/Documents/Aortic Valve Project/Normalized TIFFs and Segmentation Masks2/Images", single_channel = TRUE)
+allimages
+
+
+```
+
+*Assessments*
+
+```{r}
+unique(as.numeric(allmasks[[1]]))
+```
+
+
+```{r}
+all.equal(names(allimages), names(allmasks))
+length(allimages)
+length(allmasks)
+```
+
+
+```{r}
+names(allimages)
+```
+
+
+
+*Processing dataframe*
+
+```{r}
+mcols(allimages)<- mcols(allmasks)<- DataFrame(sample_id = names(allimages))
+```
+
+
+*Creating single cell experiment object*
+
+```{r}
+sce<- measureObjects(allmasks, image = allimages, img_id = "sample_id")
+sce
+```
+
+*What is contained within sce*
+```{r}
+counts(sce)[1:5,1:5]
+```
+
+
+```{r}
+head(colData(sce))
+```
+
+
+```{r}
+colPairNames(sce)
+```
+
+
+**Single-cell processing (5.2)**
+
+*Add additional metadata*
+
+Setting the colnames of the object to generate unique identifiers per cell
+```{r}
+colnames(sce) <- paste0(sce$sample_id, "_", sce$object_id)
+sce
+```
+
+*Transform counts*
+
+The distribution of expression counts across cells is often observed to be skewed towards the right side meaning lots of cells display low counts and few cells have high counts. To avoid analysis biases from these high-expressing cells, the expression counts are commonly transformed or clipped.
+
+Here, we perform counts transformation using an inverse hyperbolic sine function. This transformation is commonly applied to flow cytometry data. The cofactor here defines the expression range on which no scaling is performed. While the cofactor for CyTOF data is often set to 5, IMC data usually display much lower counts. We therefore apply a cofactor of 1.
+
+However, other transformations such as log(counts(spe) + 0.01) should be tested when analysing IMC data.
+
+
+```{r}
+library(dittoSeq)
+dittoRidgePlot(sce, var = "CD3-170Er", group.by = "sample_id", assay = "counts") +
+    ggtitle("CD3 - before transformation")
+dittoRidgePlot(sce, var = "CD31-151Eu", group.by = "sample_id", assay = "counts") +
+    ggtitle("CD31 - before transformation")
+dittoRidgePlot(sce, var = "aSMA-141Pr", group.by = "sample_id", assay = "counts") +
+    ggtitle("aSMA - before transformation")
+dittoRidgePlot(sce, var = "Pan-Cytokeratin-148Nd", group.by = "sample_id", assay = "counts") +
+    ggtitle("Pan-Cytokeratin - before transformation")
+dittoRidgePlot(sce, var = "CD68-159Tb", group.by = "sample_id", assay = "counts") +
+    ggtitle("CD68 - before transformation")
+dittoRidgePlot(sce, var = "CD11c-154Sm", group.by = "sample_id", assay = "counts") +
+    ggtitle("CD11c - before transformation")
+```
+
+USE THIS TRANSFORMATION!!!!!
+```{r}
+assay(sce, "exprs") <- asinh(counts(sce)/0.01)
+
+
+```
+
+
+```{r}
+dittoRidgePlot(sce, var = "CD3-170Er", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD3 - after transformation")
+dittoRidgePlot(sce, var = "CD68-159Tb", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD68 - after transformation")
+dittoRidgePlot(sce, var = "CD11c-154Sm", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD11c - after transformation")
+dittoRidgePlot(sce, var = "CD103-150Nd", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD103 - after transformation")
+dittoRidgePlot(sce, var = "CD8a-162Dy", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD8a - after transformation")
+dittoRidgePlot(sce, var = "CD69-160Gd", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD69 - after transformation")
+dittoRidgePlot(sce, var = "Pan-Cytokeratin-148Nd", group.by = "sample_id", assay = "exprs") +
+    ggtitle("Pan-Cytokeratin - after transformation")
+dittoRidgePlot(sce, var = "CD14-144Nd", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD14 - after transformation")
+
+
+
+
+dittoRidgePlot(sce, var = "aSMA-141Pr", group.by = "sample_id", assay = "exprs") +
+    ggtitle("aSMA - after transformation")
+dittoRidgePlot(sce, var = "CD31-151Eu", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD31 - after transformation")
+dittoRidgePlot(sce, var = "CD49a-174Yb", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD49a - after transformation")
+```
+
+
+
+```{r}
+
+assay(sce, "exprs") <- asinh(counts(sce)/0.001)
+
+dittoRidgePlot(sce, var = "CD3-170Er", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD3 - after transformation")
+dittoRidgePlot(sce, var = "CD68-159Tb", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD68 - after transformation")
+dittoRidgePlot(sce, var = "CD11c-154Sm", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD11c - after transformation")
+dittoRidgePlot(sce, var = "CD103-150Nd", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD103 - after transformation")
+dittoRidgePlot(sce, var = "CD8a-162Dy", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD8a - after transformation")
+dittoRidgePlot(sce, var = "CD69-160Gd", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD69 - after transformation")
+dittoRidgePlot(sce, var = "Pan-Cytokeratin-148Nd", group.by = "sample_id", assay = "exprs") +
+    ggtitle("Pan-Cytokeratin - after transformation")
+
+
+dittoRidgePlot(sce, var = "aSMA-141Pr", group.by = "sample_id", assay = "exprs") +
+    ggtitle("aSMA - after transformation")
+dittoRidgePlot(sce, var = "CD31-151Eu", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD31 - after transformation")
+dittoRidgePlot(sce, var = "CD49a-174Yb", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD49a - after transformation")
+```
+
+
+
+
+```{r}
+assay(sce, "exprs") <- log((counts(sce)+0.01))
+dittoRidgePlot(sce, var = "CD3-170Er", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD3 - after transformation")
+dittoRidgePlot(sce, var = "CD68-159Tb", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD68 - after transformation")
+dittoRidgePlot(sce, var = "CD11c-154Sm", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD11c - after transformation")
+dittoRidgePlot(sce, var = "CD103-150Nd", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD103 - after transformation")
+dittoRidgePlot(sce, var = "CD8a-162Dy", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD8a - after transformation")
+dittoRidgePlot(sce, var = "CD69-160Gd", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD69 - after transformation")
+dittoRidgePlot(sce, var = "Pan-Cytokeratin-148Nd", group.by = "sample_id", assay = "exprs") +
+    ggtitle("Pan-Cytokeratin - after transformation")
+
+
+dittoRidgePlot(sce, var = "aSMA-141Pr", group.by = "sample_id", assay = "exprs") +
+    ggtitle("aSMA - after transformation")
+dittoRidgePlot(sce, var = "CD31-151Eu", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD31 - after transformation")
+dittoRidgePlot(sce, var = "CD49a-174Yb", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD49a - after transformation")
+
+```
+
+
+
+*Define interesting channels*
+```{r}
+rowData(sce)$use_channel <- !grepl("DNA|ICSK|Ar|Xe|aSMA|Actin|Cytokeratin|Vimentin|CD31", rownames(sce))
+rowData(sce)
+
+rowData(sce)$use_channelnoDNAICSKArXe <- !grepl("DNA|ICSK|Ar|Xe", rownames(sce))
+rowData(sce)
+```
+
+
+```{r}
+multi_dittoPlot(sce, vars = rownames(sce)[rowData(sce)$use_channel],
+               group.by = "sample_id", plots = c("ridgeplot"), 
+               assay = "exprs")
+               
+```
+
+
+*Define colour scheme*
+```{r}
+library(RColorBrewer)
+color_vectors <- list()
+
+sample_id <- setNames(c(brewer.pal(6,"YlGn")[2:6],
+                        brewer.pal(6, "BuPu")[4:6]),
+                unique(sce$sample_id))
+
+color_vectors$sample_id <- sample_id
+metadata(sce)$color_vectors <- color_vectors
+metadata(sce)$color_vectors
+
+
+```
+
+
+
+##Image and Cell-Level Quality Control (Section 7)##
+
+**Segmentation quality control (7.2)**
+The first step after image segmentation is to observe its accuracy. Without having ground-truth data readily available, a common approach to segmentation quality control is to overlay segmentation masks on composite images displaying channels that were used for segmentation. The cytomapper package supports exactly this tasks by using the plotPixels function.
+
+Here, we select 3 random images and perform image- and channel-wise normalization (channels are first min-max normalized and scaled to a range of 0-1 before clipping the maximum intensity to 0.2).
+
+CD3 = c("black", "red"),
+Pan-Cytokeratin = c("black", "green"),
+```{r}
+library(cytomapper)
+set.seed(20220116)
+img_ids <- sample(seq_len(length(allimages)), 8)
+
+# Normalize and clip images
+cur_images <- allimages[img_ids]
+cur_images <- normalize(cur_images, separateImages = TRUE)
+cur_images <- normalize(cur_images, inputRange = c(0, 0.2))
+
+plotPixels(cur_images,
+           mask = allmasks[img_ids],
+           img_id = "sample_id",
+           missing_colour = "white",
+           colour_by = c("CD11c-154Sm", "CD103-150Nd", "aSMA-141Pr", "DNA1-191Ir"),
+           colour = list("CD11c-154Sm"=c("black", "yellow"), 
+                         "CD103-150Nd"=c("black", "red"), 
+                         "aSMA-141Pr"=c("black", "green"), 
+                         "DNA1-191Ir"=c("black", "blue")),
+           image_title = NULL,
+           legend = list(colour_by.title.cex = 0.7,
+                         colour_by.labels.cex = 0.7))
+
+plotPixels(cur_images,
+           mask = allmasks[img_ids],
+           img_id = "sample_id",
+           colour_by = c("CD11c-154Sm", "CD103-150Nd", "aSMA-141Pr", "DNA1-191Ir"),
+           colour = list("CD11c-154Sm"=c("black", "yellow"), 
+                         "CD103-150Nd"=c("black", "red"), 
+                         "aSMA-141Pr"=c("black", "green"), 
+                         "DNA1-191Ir"=c("black", "blue")),
+           legend = list(colour_by.title.cex = 0.7,
+                         colour_by.labels.cex = 0.7))
+```
+
+
+An additional approach to observe cell segmentation quality and potentially also antibody specificity issues is to visualize single-cell expression in form of a heatmap. Here, we sub-sample the dataset to 2000 cells for visualization purposes and overlay the cancer type from which the cells were extracted.
+```{r}
+library(dittoSeq)
+library(viridis)
+set.seed(3)
+cur_cells <- sample(seq_len(ncol(sce)), 2000)
+
+dittoHeatmap(sce[,cur_cells], genes = rownames(sce)[rowData(sce)$use_channel],
+             assay = "exprs", cluster_cols = TRUE, scale = "none",
+             heatmap.colors = viridis(100), annot.by = "sample_id",
+             annotation_colors = list(sample_id = metadata(sce)$color_vectors$sample_id))
+```
+
+
+**Image-level quality control (7.3)**
+```{r}
+library(tidyverse)
+library(ggrepel)
+library(EBImage)
+cur_snr <- lapply(allimages, function(img){
+    mats <- apply(img, 3, function(ch){
+        # Otsu threshold
+        thres <- otsu(ch, range = c(min(ch), max(ch)))
+        # Signal-to-noise ratio
+        snr <- mean(ch[ch > thres]) / mean(ch[ch <= thres])
+        # Signal intensity
+        ps <- mean(ch[ch > thres])
+        
+        return(c(snr = snr, ps = ps))
+    })
+    t(mats) %>% as.data.frame() %>% 
+        mutate(marker = colnames(mats)) %>% 
+        pivot_longer(cols = c(snr, ps))
+})
+
+cur_snr <- do.call(rbind, cur_snr)
+
+cur_snr %>% 
+    group_by(marker, name) %>%
+    summarize(mean = mean(value),
+              ci = qnorm(0.975)*sd(value)/sqrt(n())) %>%
+    pivot_wider(names_from = name, values_from = c(mean, ci)) %>%
+    ggplot() +
+    geom_point(aes(log2(mean_ps), log2(mean_snr))) +
+    geom_label_repel(aes(log2(mean_ps), log2(mean_snr), label = marker)) +
+    theme_minimal(base_size = 15) + ylab("Signal-to-noise ratio [log2]") +
+    xlab("Signal intensity [log2]")
+```
+
+
+Another quality indicator is the image area covered by cells (or biological tissue). This metric identifies ROIs where little cells are present, possibly hinting at incorrect selection of the ROI. We can compute the percentage of covered image area using the metadata contained in the SpatialExperiment object:
+
+Note: Can't do this cuz we don't have the variables "width_px" and "height_px"
+```{r}
+colData(sce) %>%
+    as.data.frame() %>%
+    group_by(sample_id) %>%
+    summarize(cell_area = sum(s.area)) %>% summarize(no_pixels = mean(width_px) * mean(height_px)) %>%
+    mutate(covered_area = cell_area / no_pixels) %>%
+    ggplot() +
+        geom_point(aes(reorder(sample_id,covered_area), covered_area)) + 
+        theme_minimal(base_size = 15) +
+        ylim(c(0, 1)) + 
+        theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 8)) +
+        ylab("% covered area") + xlab("")
+```
+
+
+
+It can be beneficial to visualize the mean marker expression per image to identify images with outlying marker expression. This check does not indicate image quality per se but can highlight biological differences. Here, we will use the aggregateAcrossCells function of the scuttle package to compute the mean expression per image. For visualization purposes, we again asinh transform the mean expression values. 
+
+assay(sce, "exprs") <- asinh(counts(sce)/0.01)
+
+```{r}
+library(scuttle)
+
+image_mean <- aggregateAcrossCells(sce, 
+                                   ids = sce$sample_id, 
+                                   statistics="mean",
+                                   use.assay.type = "counts")
+assay(image_mean, "exprs") <- asinh(counts(image_mean)/0.01)
+
+metadata(sce)$color_vectors <- color_vectors
+
+dittoHeatmap(image_mean, genes = rownames(sce)[rowData(sce)$use_channel],
+             assay = "exprs", cluster_cols = TRUE, scale = "none",
+             heatmap.colors = viridis(100), 
+             annot.by = c("sample_id"),
+             annotation_colors = list(sample_id = metadata(sce)$color_vectors$sample_id),
+             show_colnames = TRUE)
+
+dittoHeatmap(image_mean, genes = rownames(sce)[rowData(sce)$use_channel],
+             assay = "exprs", cluster_cols = FALSE, scale = "none",
+             heatmap.colors = viridis(100), 
+             annot.by = c("sample_id"),
+             annotation_colors = list(sample_id = metadata(sce)$color_vectors$sample_id),
+             show_colnames = TRUE)
+
+dittoHeatmap(image_mean, genes = rownames(sce)[rowData(sce)$use_channelnoDNAICSKArXe],
+             assay = "exprs", cluster_cols = TRUE, scale = "none",
+             heatmap.colors = viridis(100), 
+             annot.by = c("sample_id"),
+             annotation_colors = list(sample_id = metadata(sce)$color_vectors$sample_id),
+             show_colnames = TRUE)
+
+dittoHeatmap(image_mean, genes = rownames(sce)[rowData(sce)$use_channelnoDNAICSKArXe],
+             assay = "exprs", cluster_cols = FALSE, scale = "none",
+             heatmap.colors = viridis(100), 
+             annot.by = c("sample_id"),
+             annotation_colors = list(sample_id = metadata(sce)$color_vectors$sample_id),
+             show_colnames = TRUE)
+
+?dittoHeatmap()
+
+```
+
+
+
+
+**Cell-level quality control (7.4)**
+
+We observe the distributions of cell size across the individual images. Differences in cell size distributions can indicate segmentation biases due to differences in cell density or can indicate biological differences due to cell type compositions (tumor cells tend to be larger than immune cells).
+```{r}
+colData(sce) %>%
+    as.data.frame() %>%
+    group_by(sample_id) %>%
+    ggplot() +
+        geom_boxplot(aes(sample_id, s.area)) +
+        theme_minimal(base_size = 15) + 
+        theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 8)) +
+        ylab("Cell area") + xlab("")
+```
+
+
+```{r}
+summary(sce$s.area)
+```
+
+
+How many cells with an area < 5? < 3? < 2?
+```{r}
+sum(sce$s.area < 5)
+```
+
+
+We detect very small cells in the dataset and will remove them. The chosen threshold is arbitrary and needs to be adjusted per dataset.
+```{r}
+sce2 <- sce[,sce$s.area >= 5]
+```
+
+
+
+We will use non-linear dimensionality reduction methods to project cells from a high-dimensional (40) down to a low-dimensional (2) space. For this the scater package provides the runUMAP and runTSNE function. To ensure reproducibility, we will need to set a seed; however different seeds and different parameter settings (e.g. the perplexity) parameter in the runTSNE function need to be tested to avoid interpreting visualization artefacts. For dimensionality reduction, we will use all channels that show biological variation across the dataset. However, marker selection can be performed with different biological questions in mind.
+
+Use_channels = just the immune cells (no CD31, actin, etc.)
+```{r}
+library(scater)
+
+set.seed(220225)
+sce <- runUMAP(sce, subset_row = rowData(sce)$use_channel, exprs_values = "exprs") 
+sce2 <- runUMAP(sce2, subset_row = rowData(sce2)$use_channel, exprs_values = "exprs")
+```
+
+
+```{r}
+reducedDims(sce)
+reducedDims(sce2)
+```
+
+
+```{r}
+head(reducedDim(sce, "UMAP"))
+head(reducedDim(sce2, "UMAP"))
+```
+
+*Visualize sample ID*
+
+```{r}
+# visualize sample id 
+p1 <- dittoDimPlot(sce, var = "sample_id", reduction.use = "UMAP", size = 0.2) + 
+      scale_color_manual(values = metadata(sce)$color_vectors$sample_id) +
+    ggtitle("Sample ID on UMAP")
+p1
+
+p1_2 <- dittoDimPlot(sce2, var = "sample_id", reduction.use = "UMAP", size = 0.2) + 
+      scale_color_manual(values = metadata(sce2)$color_vectors$sample_id) +
+    ggtitle("Sample ID on UMAP")
+p1_2
+```
+
+
+
+*Visualize marker expression*
+```{r}
+p2 <- dittoDimPlot(sce, var = "CD3-170Er", reduction.use = "UMAP", 
+                   assay = "exprs", size = 0.2) +
+    scale_color_viridis(name = "CD3-170Er") +
+    ggtitle("CD3 expression on UMAP")
+p2
+
+p2_2 <- dittoDimPlot(sce2, var = "CD3-170Er", reduction.use = "UMAP", 
+                   assay = "exprs", size = 0.2) +
+    scale_color_viridis(name = "CD3-170Er") +
+    ggtitle("CD3 expression on UMAP")
+p2_2
+```
+
+
+
+##Batch Effect Correction (Section 8)##
+
+Staining/expression differences can arise between the individual samples. This can arise due to technical (e.g., differences in sample processing) as well as biological (e.g. differential expression between patients/indications) reasons. However, the combination of these effects hinders cell phenotyping via clustering as highlighted in Section 9.2.
+
+To integrate cells across samples, we can use computational strategies developed for correcting batch effects in single-cell RNA sequencing data. In the following sections, we will use functions of the batchelor, harmony and Seurat packages to correct for such batch effects.
+
+Of note: the correction approaches presented here aim at removing any differences between samples. This will also remove biological differences between the patients/indications. Nevertheless, integrating cells across samples can facilitate the detection of cell phenotypes via clustering.
+
+
+**fastMNN correction (8.1)**
+
+The batchelor package provides the mnnCorrect and fastMNN functions to correct for differences between samples/batches. Both functions build up on finding mutual nearest neighbors (MNN) among the cells of different samples and correct expression differences between the cells (Haghverdi et al. 2018). The mnnCorrect function returns corrected expression counts while the fastMNN functions performs the correction in reduced dimension space. As such, fastMNN returns integrated cells in form of a low dimensional embedding.
+
+
+*Perform sample correction (8.1.1)*
+
+Here, we apply the fastMNN function to integrate cells between patients. By setting auto.merge = TRUE the function estimates the best batch merging order by maximizing the number of MNN pairs at each merging step. This is more time consuming than merging sequentially based on how batches appear in the dataset (default). We again select the markers defined in Section 5.2 for sample correction.
+
+The function returns a SingleCellExperiment object which contains corrected low-dimensional coordinates for each cell in the reducedDim(out, "corrected") slot. This low-dimensional embedding can be further used for clustering and non-linear dimensionality reduction. We transfer the corrected coordinates to the main SpatialExperiment object.
+
+```{r}
+library(batchelor)
+set.seed(220228)
+out <- fastMNN(sce, batch = sce$sample_id,
+               auto.merge = TRUE,
+               subset.row = rowData(sce)$use_channel,
+               assay.type = "exprs")
+
+out2 <- fastMNN(sce2, batch = sce2$sample_id,
+               auto.merge = TRUE,
+               subset.row = rowData(sce2)$use_channel,
+               assay.type = "exprs")
+
+# Transfer the correction results to the main spe object
+reducedDim(sce, "fastMNN") <- reducedDim(out, "corrected")
+reducedDim(sce2, "fastMNN") <- reducedDim(out2, "corrected")
+sce
+sce2
+```
+
+
+*Quality control of correction results (8.1.2)* 
+```{r}
+merge_info <- metadata(out)$merge.info
+merge_info2 <- metadata(out2)$merge.info
+
+DataFrame(left = merge_info$left,
+          right = merge_info$right,
+          batch.size = merge_info$batch.size,
+          max_lost_var = rowMax(merge_info$lost.var))
+
+DataFrame(left = merge_info2$left,
+          right = merge_info2$right,
+          batch.size = merge_info2$batch.size,
+          max_lost_var = rowMax(merge_info2$lost.var))
+
+```
+
+
+
+*Visualization (8.1.3)*
+```{r}
+library(scater)
+
+set.seed(220229)
+sce <- runUMAP(sce, dimred= "fastMNN", name = "UMAP_mnnCorrected") 
+sce2 <- runUMAP(sce2, dimred= "fastMNN", name = "UMAP_mnnCorrected") 
+```
+
+
+
+```{r}
+library(cowplot)
+library(dittoSeq)
+library(viridis)
+
+# visualize patient id 
+p3 <- dittoDimPlot(sce, var = "sample_id", 
+                   reduction.use = "UMAP", size = 0.2) + 
+    scale_color_manual(values = metadata(sce)$color_vectors$sample_id) +
+    ggtitle("Patient ID on UMAP before correction")
+p4 <- dittoDimPlot(sce, var = "sample_id", 
+                   reduction.use = "UMAP_mnnCorrected", size = 0.2) + 
+    scale_color_manual(values = metadata(sce)$color_vectors$sample_id) +
+    ggtitle("Patient ID on UMAP after correction")
+
+plot_grid(p3, p4)
+
+p3_2 <- dittoDimPlot(sce2, var = "sample_id", 
+                   reduction.use = "UMAP", size = 0.2) + 
+    scale_color_manual(values = metadata(sce2)$color_vectors$sample_id) +
+    ggtitle("Patient ID on UMAP before correction")
+p4_2 <- dittoDimPlot(sce2, var = "sample_id", 
+                   reduction.use = "UMAP_mnnCorrected", size = 0.2) + 
+    scale_color_manual(values = metadata(sce2)$color_vectors$sample_id) +
+    ggtitle("Patient ID on UMAP after correction")
+
+plot_grid(p3_2, p4_2)
+```
+
+
+```{r}
+markers <- c("CD3-170Er", "CD8a-162Dy", "CD11c-154Sm", "CD49a-174Yb", "CD69-160Gd", "CD103-150Nd")
+
+# Before correction
+plot_list <- multi_dittoDimPlot(sce2, var = markers, reduction.use = "UMAP", 
+                   assay = "exprs", size = 0.2, list.out = TRUE) 
+plot_list <- lapply(plot_list, function(x) x + scale_color_viridis())
+plot_grid(plotlist = plot_list) 
+
+```
+
+
+```{r}
+# After correction
+plot_list <- multi_dittoDimPlot(sce2, var = markers, reduction.use = "UMAP_mnnCorrected", 
+                   assay = "exprs", size = 0.2, list.out = TRUE) 
+plot_list <- lapply(plot_list, function(x) x + scale_color_viridis(option="B"))
+plot_grid(plotlist = plot_list) 
+```
+
+
+genes = rownames(sce2)[rowData(sce2)$use_channel]
+
+rowData(sce)$use_channelnoDNAICSKArXe <- !grepl("DNA|ICSK|Ar|Xe", rownames(sce))
+rowData(sce)
+```{r}
+colData(sce2)$Slide3ROI1 <- !grepl("Slide 3 ROI 2|Slide 3 ROI 3|Slide 3 ROI 4|Slide 3 ROI 5|Slide 4 ROI 1|
+                                   Slide 4 ROI 2|Slide 4 ROI 3", 
+                                   colnames(sce2))
+colData(sce2)
+```
+
+
+```{r}
+colData(sce2)$Slide3ROI2 <- !grepl("Slide 3 ROI 1|Slide 3 ROI 3|Slide 3 ROI 4|Slide 3 ROI 5|Slide 4 ROI 1|
+                                   Slide 4 ROI 2|Slide 4 ROI 3", 
+                                   colnames(sce2))
+colData(sce2)
+```
+
+
+```{r}
+colData(sce2)$Slide3ROI3 <- !grepl("Slide 3 ROI 1|Slide 3 ROI 2|Slide 3 ROI 4|Slide 3 ROI 5|Slide 4 ROI 1|
+                                   Slide 4 ROI 2|Slide 4 ROI 3", 
+                                   colnames(sce2))
+colData(sce2)
+```
+
+
+```{r}
+colData(sce2)$Slide3ROI4 <- !grepl("Slide 3 ROI 1|Slide 3 ROI 2|Slide 3 ROI 3|Slide 3 ROI 5|Slide 4 ROI 1|
+                                   Slide 4 ROI 2|Slide 4 ROI 3", 
+                                   colnames(sce2))
+colData(sce2)
+```
+
+
+```{r}
+colData(sce2)$Slide3ROI5 <- !grepl("Slide 3 ROI 1|Slide 3 ROI 2|Slide 3 ROI 3|Slide 3 ROI 4|Slide 4 ROI 1|
+                                   Slide 4 ROI 2|Slide 4 ROI 3", 
+                                   colnames(sce2))
+colData(sce2)
+```
+
+
+```{r}
+colData(sce2)$Slide4ROI1 <- !grepl("Slide 3 ROI 1|Slide 3 ROI 2|Slide 3 ROI 3|Slide 3 ROI 4|Slide 3 ROI 5|
+                                   Slide 4 ROI 2|Slide 4 ROI 3", 
+                                   colnames(sce2))
+colData(sce2)
+```
+
+
+```{r}
+colData(sce2)$Slide4ROI2 <- !grepl("Slide 3 ROI 1|Slide 3 ROI 2|Slide 3 ROI 3|Slide 3 ROI 4|Slide 3 ROI 5|
+                                   Slide 4 ROI 1|Slide 4 ROI 3", 
+                                   colnames(sce2))
+colData(sce2)
+```
+
+```{r}
+colData(sce2)$Slide4ROI3 <- !grepl("Slide 3 ROI 1|Slide 3 ROI 2|Slide 3 ROI 3|Slide 3 ROI 4|Slide 3 ROI 5|
+                                   Slide 4 ROI 1|Slide 4 ROI 2", 
+                                   colnames(sce2))
+colData(sce2)
+```
+
+
+
+```{r}
+#magma = A; inferno = B; plasma = C; viridis = D
+
+
+dittoDimPlot(sce2, var = "CD11c-154Sm", reduction.use = "UMAP_mnnCorrected", 
+                   assay = "exprs", size = 0.2, cells.use = colnames(sce2)[colData(sce2)$Slide3ROI2]) +
+    scale_colour_viridis(name = "CD11c-154Sm",option = "B") +
+    ggtitle("CD11c expression on UMAP")
+```
+
+
+```{r}
+#magma = A; inferno = B; plasma = C; viridis = D
+
+
+dittoDimPlot(sce2, var = "CD8a-162Dy", reduction.use = "UMAP_mnnCorrected", 
+                   assay = "exprs", size = 0.2, split.by = "sample_id") +
+    scale_colour_viridis(name = "CD8a-162Dy",option = "B") +
+    ggtitle("CD8a expression on UMAP")
+
+dittoDimPlot(sce2, var = "CD103-150Nd", reduction.use = "UMAP_mnnCorrected", 
+                   assay = "exprs", size = 0.2, split.by = "sample_id") +
+    scale_colour_viridis(name = "CD103-150Nd",option = "B") +
+    ggtitle("CD103 expression on UMAP")
+
+
+dittoDimPlot(sce2, var = "CD49a-174Yb", reduction.use = "UMAP_mnnCorrected", 
+                   assay = "exprs", size = 0.2, split.by = "sample_id") +
+    scale_color_viridis(name = "CD49a-174Yb", option ="B") +
+    ggtitle("CD49a expression on UMAP")
+
+dittoDimPlot(sce2, var = "CD69-160Gd", reduction.use = "UMAP_mnnCorrected", 
+                   assay = "exprs", size = 0.2, split.by = "sample_id") +
+    scale_colour_viridis(name = "CD69-160Gd",option = "B") +
+    ggtitle("CD69 expression on UMAP")
+
+dittoDimPlot(sce2, var = "GranzymeB-167Er", reduction.use = "UMAP_mnnCorrected", 
+                   assay = "exprs", size = 0.2, split.by = "sample_id") +
+    scale_colour_viridis(name = "GranzymeB-167Er",option = "B") +
+    ggtitle("GZMB expression on UMAP")
+
+dittoDimPlot(sce2, var = "CD11c-154Sm", reduction.use = "UMAP_mnnCorrected", 
+                   assay = "exprs", size = 0.2, split.by = "sample_id") +
+    scale_colour_viridis(name = "CD11c-154Sm",option = "B") +
+    ggtitle("CD11c expression on UMAP")
+
+
+```
+
+
+
+```{r}
+dittoRidgePlot(sce, var = "CD3-170Er", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD3 - after transformation")
+dittoRidgePlot(sce, var = "CD68-159Tb", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD68 - after transformation")
+dittoRidgePlot(sce, var = "CD11c-154Sm", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD11c - after transformation")
+dittoRidgePlot(sce, var = "CD103-150Nd", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD103 - after transformation")
+dittoRidgePlot(sce, var = "CD8a-162Dy", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD8a - after transformation")
+dittoRidgePlot(sce, var = "CD69-160Gd", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD69 - after transformation")
+dittoRidgePlot(sce, var = "Pan-Cytokeratin-148Nd", group.by = "sample_id", assay = "exprs") +
+    ggtitle("Pan-Cytokeratin - after transformation")
+
+
+dittoRidgePlot(sce, var = "aSMA-141Pr", group.by = "sample_id", assay = "exprs") +
+    ggtitle("aSMA - after transformation")
+dittoRidgePlot(sce, var = "CD31-151Eu", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD31 - after transformation")
+dittoRidgePlot(sce, var = "CD49a-174Yb", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD49a - after transformation")
+```
+
+
+**Harmony correction (8.2)**
+The harmony algorithm performs batch correction by iteratively clustering and correcting the positions of cells in PCA space (Korsunsky et al. 2019). It requires a matrix of transformed expression counts and internally performs PCA before kmeans clustering. We will first create the expression matrix and call the HarmonyMatrix function to perform the correction.
+
+Similar to the fastMNN function, harmony returns the corrected low-dimensional coordinates for each cell. These can be saved in the reducedDim slot of the original SpatialExperiment object.
+```{r}
+library(harmony)
+
+matharmony <- t(assay(sce2, "exprs")[rowData(sce2)$use_channel,])
+
+harmony_emb <- HarmonyMatrix(matharmony, sce2$sample_id, do_pca = TRUE)
+
+reducedDim(sce2, "harmony") <- harmony_emb
+```
+
+
+
+
+##Cell Phenotyping (Section 9)##
+
+**Load data (9.1)**
+```{r}
+library(SpatialExperiment)
+
+# Sample cells
+set.seed(220619)
+cur_cells <- sample(seq_len(ncol(sce)), 250)
+cur_cells2 <- sample(seq_len(ncol(sce2)), 250)
+```
+
+
+**Clustering (9.2)**
+```{r}
+library(Rphenograph)
+library(igraph)
+library(dittoSeq)
+library(viridis)
+
+```
+
+
+Uncorrected
+```{r}
+mat <- t(assay(sce2, "exprs")[rowData(sce2)$use_channel,])
+
+out <- Rphenograph(mat, k = 45)
+
+clusters <- factor(membership(out[[2]]))
+
+sce2$pg_clusters <- clusters
+
+dittoDimPlot(sce2, var = "pg_clusters", 
+             reduction.use = "UMAP", size = 0.2,
+             do.label = TRUE) +
+    ggtitle("Phenograph clusters expression on UMAP")
+
+dittoDimPlot(sce2, var = "pg_clusters", 
+             reduction.use = "UMAP", size = 0.2,
+             do.label = TRUE, split.by = "sample_id") + 
+    ggtitle("Phenograph clusters expression on UMAP")
+
+
+```
+
+
+Corrected
+```{r}
+set.seed(13503)
+mat <- reducedDim(sce2, "fastMNN")
+
+out <- Rphenograph(mat, k = 45)
+
+clusters <- factor(membership(out[[2]]))
+
+sce2$pg_clusters_corrected <- clusters
+
+dittoDimPlot(sce2, var = "pg_clusters_corrected", 
+             reduction.use = "UMAP_mnnCorrected", size = 0.2,
+             do.label = TRUE) +
+    ggtitle("Phenograph clusters expression on UMAP, integrated cells")
+
+dittoDimPlot(sce2, var = "pg_clusters_corrected", 
+             reduction.use = "UMAP_mnnCorrected", size = 0.2,
+             do.label = TRUE, split.by = "sample_id") +
+    ggtitle("Phenograph clusters expression on UMAP, integrated cells")
+
+
+```
+
+
+
+```{r}
+
+Seurat::DimPlot(vgm[[2]],reduction = "umap",group.by = "sample_id", 
+                cols = c("black","red","blue","forestgreen","darkorange","darkviolet","deepskyblue","pink",
+                                "brown4","papayawhip","slategray2","yellow","yellowgreen","tan","hotpink","green",
+                                "skyblue4","yellow3","turquoise"))
+
+
+
+pgclusters_corrected <- setNames(c("black","red","blue","forestgreen","darkorange","purple","deepskyblue",
+                                   "yellow","pink","mediumaquamarine","brown4","hotpink","greenyellow","purple4","turquoise1"),
+                unique(sce2$pg_clusters_corrected))
+
+color_vectors$pgclusters_corrected <- pgclusters_corrected
+metadata(sce2)$color_vectors <- color_vectors
+metadata(sce2)$color_vectors
+```
+
+
+```{r}
+dittoDimPlot(sce2, var = "pg_clusters_corrected", 
+             reduction.use = "UMAP_mnnCorrected", size = 0.2,
+             do.label = TRUE) +
+             scale_color_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected) +
+    ggtitle("PhenoGraph clusters expression on UMAP")
+
+dittoDimPlot(sce2, var = "pg_clusters_corrected", 
+             reduction.use = "UMAP_mnnCorrected", size = 0.2,
+             do.label = FALSE, split.by = "sample_id") +
+             scale_color_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected) +
+    ggtitle("PhenoGraph clusters expression on UMAP")
+```
+
+
+
+```{r}
+dittoDimPlot(sce2, var = "pg_clusters_corrected", 
+             reduction.use = "UMAP_mnnCorrected", size = 0.2,
+             do.label = TRUE, cells.use = colnames(sce2)[colData(sce2)$Slide3ROI1]) +
+             scale_color_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected) +
+    ggtitle("Phenograph clusters expression on UMAP, integrated cells (Slide 3 ROI 1)")
+
+dittoDimPlot(sce2, var = "pg_clusters_corrected", 
+             reduction.use = "UMAP_mnnCorrected", size = 0.2,
+             do.label = TRUE, cells.use = colnames(sce2)[colData(sce2)$Slide3ROI2]) +
+             scale_color_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected) +
+    ggtitle("Phenograph clusters expression on UMAP, integrated cells (Slide 3 ROI 2)")
+
+dittoDimPlot(sce2, var = "pg_clusters_corrected", 
+             reduction.use = "UMAP_mnnCorrected", size = 0.2,
+             do.label = TRUE, cells.use = colnames(sce2)[colData(sce2)$Slide3ROI3]) +
+             scale_color_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected) +
+    ggtitle("Phenograph clusters expression on UMAP, integrated cells (Slide 3 ROI 3)")
+
+dittoDimPlot(sce2, var = "pg_clusters_corrected", 
+             reduction.use = "UMAP_mnnCorrected", size = 0.2,
+             do.label = TRUE, cells.use = colnames(sce2)[colData(sce2)$Slide3ROI4]) +
+             scale_color_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected) +
+    ggtitle("Phenograph clusters expression on UMAP, integrated cells (Slide 3 ROI 4)")
+
+dittoDimPlot(sce2, var = "pg_clusters_corrected", 
+             reduction.use = "UMAP_mnnCorrected", size = 0.2,
+             do.label = TRUE, cells.use = colnames(sce2)[colData(sce2)$Slide3ROI5]) +
+             scale_color_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected) +
+    ggtitle("Phenograph clusters expression on UMAP, integrated cells (Slide 3 ROI 5)")
+
+dittoDimPlot(sce2, var = "pg_clusters_corrected", 
+             reduction.use = "UMAP_mnnCorrected", size = 0.2,
+             do.label = TRUE, cells.use = colnames(sce2)[colData(sce2)$Slide4ROI1]) +
+             scale_color_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected) +
+    ggtitle("Phenograph clusters expression on UMAP, integrated cells (Slide 4 ROI 1)")
+
+dittoDimPlot(sce2, var = "pg_clusters_corrected", 
+             reduction.use = "UMAP_mnnCorrected", size = 0.2,
+             do.label = TRUE, cells.use = colnames(sce2)[colData(sce2)$Slide4ROI2]) +
+             scale_color_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected) +
+    ggtitle("Phenograph clusters expression on UMAP, integrated cells (Slide 4 ROI 2)")
+
+dittoDimPlot(sce2, var = "pg_clusters_corrected", 
+             reduction.use = "UMAP_mnnCorrected", size = 0.2,
+             do.label = TRUE, cells.use = colnames(sce2)[colData(sce2)$Slide4ROI3]) +
+             scale_color_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected) +
+    ggtitle("Phenograph clusters expression on UMAP, integrated cells (Slide 4 ROI 3)")
+```
+
+
+
+```{r}
+dittoHeatmap(sce[,cur_cells], 
+             genes = rownames(sce)[rowData(sce)$use_channel],
+             assay = "exprs", scale = "none",
+             heatmap.colors = viridis(100), 
+             annot.by = c("pg_clusters", "sample_id"),
+             annot.colors = c(dittoColors(1)[1:length(unique(sce$pg_clusters))],
+                              metadata(sce)$color_vectors$sample_id))
+
+
+```
+
+
+Using heatmap to assign characteristics to pg clusters
+```{r}
+dittoHeatmap(sce2[,cur_cells2], 
+             genes = rownames(sce2)[rowData(sce2)$use_channel],
+             assay = "exprs", scale = "none",
+             heatmap.colors = viridis(100), 
+             annot.by = c("pg_clusters_corrected", "sample_id"),
+             annot.colors = c(dittoColors(1)[1:length(unique(sce2$pg_clusters_corrected))],
+                              metadata(sce2)$color_vectors$pgclusters_corrected,
+                              metadata(sce2)$color_vectors$sample_id))
+
+dittoHeatmap(sce2[,cur_cells2], 
+             genes = rownames(sce2)[rowData(sce2)$use_channel],
+             assay = "exprs", scale = "none",
+             heatmap.colors = viridis(100), 
+             annot.by = c("pg_clusters_corrected", "sample_id"),
+             annot.colors = c(metadata(sce2)$color_vectors$pgclusters_corrected, 
+                              metadata(sce2)$color_vectors$sample_id))
+
+dittoHeatmap(sce2[,cur_cells2], 
+             genes = rownames(sce2)[rowData(sce2)$use_channelnoDNAICSKArXe],
+             assay = "exprs", scale = "none",
+             heatmap.colors = viridis(100), 
+             annot.by = c("pg_clusters_corrected", "sample_id"),
+             annot.colors = c(metadata(sce2)$color_vectors$pgclusters_corrected, 
+                              metadata(sce2)$color_vectors$sample_id))
+```
+
+
+```{r}
+dittoHeatmap(sce2[,cur_cells2], 
+             genes = rownames(sce2)[rowData(sce2)$use_channel],
+             assay = "exprs", scale = "none",
+             heatmap.colors = viridis(100), 
+             annot.by = c("pg_clusters_corrected"),
+             annot.colors = c(metadata(sce2)$color_vectors$pgclusters_corrected))
+
+dittoHeatmap(sce2[,cur_cells2], 
+             genes = rownames(sce2)[rowData(sce2)$use_channelnoDNAICSKArXe],
+             assay = "exprs", scale = "none",
+             heatmap.colors = viridis(100), 
+             annot.by = c("pg_clusters_corrected"),
+             annot.colors = c(metadata(sce2)$color_vectors$pgclusters_corrected))
+```
+
+
+
+**Classification approach (9.3)** 
+
+
+```{r}
+dittoRidgePlot(sce, var = "CD3-170Er", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD3 - after transformation")
+dittoRidgePlot(sce, var = "CD68-159Tb", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD68 - after transformation")
+dittoRidgePlot(sce, var = "CD11c-154Sm", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD11c - after transformation")
+dittoRidgePlot(sce, var = "CD103-150Nd", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD103 - after transformation")
+dittoRidgePlot(sce, var = "CD8a-162Dy", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD8a - after transformation")
+dittoRidgePlot(sce, var = "CD69-160Gd", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD69 - after transformation")
+dittoRidgePlot(sce, var = "Pan-Cytokeratin-148Nd", group.by = "sample_id", assay = "exprs") +
+    ggtitle("Pan-Cytokeratin - after transformation")
+dittoRidgePlot(sce, var = "CD14-144Nd", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD14 - after transformation")
+
+
+
+
+dittoRidgePlot(sce, var = "aSMA-141Pr", group.by = "sample_id", assay = "exprs") +
+    ggtitle("aSMA - after transformation")
+dittoRidgePlot(sce, var = "CD31-151Eu", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD31 - after transformation")
+dittoRidgePlot(sce, var = "CD49a-174Yb", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD49a - after transformation")
+dittoRidgePlot(sce, var = "CD45-152Sm", group.by = "sample_id", assay = "exprs") +
+    ggtitle("CD45 - after transformation")
+```
+
+
+*Manual labelling of cells (9.3.1)*
+```{r}
+library(cytomapper)
+if (interactive()) {
+    
+    cytomapperShiny(object = sce2, mask = allmasks, image = allimages, 
+                    cell_id = "object_id", img_id = "sample_id")
+}
+```
+
+
+*Define cell type colours (9.3.2)*
+```{r}
+celltype <- setNames(c("greenyellow", "plum1", "blue", "forestgreen", "darkorange", 
+                       "purple","deepskyblue", "grey"),
+                     c("CD3-CD11c+", "CD3-CD14+", "CD3-CD68+", "CD3+CD8a+", "CD14+CD11c+", 
+                       "CD45+","CD103+CD11c+", "undefined"))
+
+metadata(sce2)$color_vectors$celltype <- celltype
+
+metadata(sce2)$color_vectors
+```
+
+
+*Read in and consolidate labelled data (9.3.3)*
+Here, we will read in the individual SpatialExperiment objects containing the labeled cells and concatenate them. In the process of concatenating the SpatialExperiment objects along their columns, the sample_id entry is appended by .1, .2, .3, ... due to replicated entries.
+```{r}
+library(SingleCellExperiment)
+label_files <- list.files("~/Documents/Aortic Valve Project/Normalized TIFFs and Segmentation Masks2", 
+                          full.names = TRUE, pattern = ".rds$")
+unique(label_files)
+# Read in SCE objects
+sce2s <- lapply(label_files, readRDS)
+
+# Merge SCE objects
+concat_sce2 <- do.call("cbind", sce2s)
+
+```
+
+
+
+In the following code chunk we will identify cells that were labeled multiple times. This occurs when different cell phenotypes are gated per image and can affect immune cells that are located inside the tumor compartment.
+
+We will first identify those cells that were uniquely labeled. In the next step, we will identify those cells that were labeled twice AND were labeled as Tumor cells. These cells will be assigned their immune cell label. Finally, we will save the unique labels within the original SpatialExperiment object.
+
+For these tasks, we will define a filter function:
+```{r}
+filter_labels <- function(object, 
+                          label = "cytomapper_CellLabel") {
+    cur_tab <- unclass(table(colnames(object), object[[label]]))
+    
+    cur_labels <- colnames(cur_tab)[apply(cur_tab, 1, which.max)]
+    names(cur_labels) <- rownames(cur_tab)
+    
+    cur_labels <- cur_labels[rowSums(cur_tab) == 1]
+    
+    return(cur_labels)
+}
+```
+
+
+
+This function is now applied to all cells and then only non-CD45 cells.
+```{r}
+#all cells
+labels <- filter_labels(concat_sce2)
+
+unique(labels)
+#non-CD45
+cur_sce2 <- concat_sce2[,concat_sce2$cytomapper_CellLabel != "CD45+"]
+
+non_CD45_labels <- filter_labels(cur_sce2)
+
+
+additional_cells <- setdiff(names(non_CD45_labels), names(labels))
+
+#final labels
+final_labels <- c(labels, non_CD45_labels[additional_cells])
+
+# Transfer labels to SCE object
+sce2_labels <- rep("unlabeled", ncol(sce2))
+names(sce2_labels) <- colnames(sce2)
+sce2_labels[names(final_labels)] <- final_labels
+sce2$cell_labels <- sce2_labels
+
+# Number of cells labeled per sample
+table(sce2$cell_labels, sce2$sample_id)
+
+
+```
+
+
+Based on these labels, we can now train a random forest classifier to classify all remaining, unlabeled cells.
+
+
+*Train classifier (9.3.4)*
+In this section, we will use the caret framework for machine learning in R. This package provides an interface to train a number of regression and classification models in a coherent fashion. We use a random forest classifier due to low number of parameters, high speed and an observed high performance for cell type classification (Hoch et al. 2022).
+
+In the following section, we will first split the SpatialExperiment object into labeled and unlabeled cells. Based on the labeled cells, we split the data into a train (75% of the data) and test (25% of the data) dataset. We currently do not provide an independently labeled validation dataset.
+
+The caret package provides the trainControl function, which specifies model training parameters and the train function, which performs the actual model training. While training the model, we also want to estimate the best model parameters. In the case of the chosen random forest model (method = "rf"), we only need to estimate a single parameters (mtry) which corresponds to the number of variables randomly sampled as candidates at each split. To estimate the best parameter, we will perform a 5-fold cross validation (set within trainControl) over a tune length of 5 entries to mtry.
+
+
+Remember, definition of use_channel: 
+rowData(sce)$use_channel <- !grepl("DNA|ICSK|Ar|Xe|aSMA|Actin|Cytokeratin|Vimentin|CD31", rownames(sce))
+
+rowData(sce)$use_channelnoDNAICSKArXe <- !grepl("DNA|ICSK|Ar|Xe", rownames(sce))
+```{r}
+library(caret)
+
+# Split between labeled and unlabeled cells
+lab_sce2 <- sce2[,sce2$cell_labels != "unlabeled"]
+unlab_sce2 <- sce2[,sce2$cell_labels == "unlabeled"]
+
+# Randomly split into train and test data
+set.seed(221029)
+trainIndex <- createDataPartition(factor(lab_sce2$cell_labels), p = 0.75)
+train_sce2 <- lab_sce2[,trainIndex$Resample1]
+test_sce2 <- lab_sce2[,-trainIndex$Resample1]
+
+# Specify train parameters for 5-fold cross validation
+fitControl <- trainControl(method = "cv",
+                           number = 5)
+
+# Select the data for training
+cur_mat <- t(assay(train_sce2, "exprs")[rowData(train_sce2)$use_channel,])
+
+# Train a random forest model for predicting cell labels
+# This call also performs parameter tuning
+rffit <- train(x = cur_mat, 
+               y = factor(train_sce2$cell_labels),
+               method = "rf", ntree = 1000,
+               tuneLength = 5,
+               trControl = fitControl)
+
+rffit
+```
+
+
+*Classifier performance (9.3.5)*
+We next observe the accuracy of the classifer when predicting cell phenotypes across the cross-validation as well as the test dataset.
+
+First, we can visualize the classification accuracy during parameter tuning:
+```{r}
+ggplot(rffit) + 
+  geom_errorbar(data = rffit$results,
+                aes(ymin = Accuracy - AccuracySD,
+                    ymax = Accuracy + AccuracySD),
+                width = 0.4) +
+    theme_classic(base_size = 15)
+```
+
+
+It is often recommended to visualize the variable importance of the classifier. The following plot specifies which variables (markers) are most important for classifying the data.
+```{r}
+plot(varImp(rffit))
+```
+
+As expected, the markers that were used for gating were important for classification.
+
+To assess the accuracy, sensitivity, specificity, among other quality measures of the classifier, we will now predict cell phenotypes in the test data.
+```{r}
+# Select test data
+cur_mat <- t(assay(test_sce2, "exprs")[rowData(test_sce2)$use_channel,])
+
+# Predict cell phenotypes in test data
+cur_pred <- predict(rffit, 
+                    newdata = cur_mat)
+```
+
+
+While the overall classification accuracy can appear high, we also want to check if each cell phenotype class is correctly predicted. For this, we will calculate the confusion matrix between predicted and actual cell labels. This measure highlights individual cell phenotype classes that were not correctly predicted by the classifier. When setting mode = "everything", the confusionMatrix function returns all available prediction measures including sensitivity, specificity, precision, recall and the F1 score per cell phenotype class.
+```{r}
+cm <- confusionMatrix(data = cur_pred, 
+                      reference = factor(test_sce2$cell_labels), 
+                      mode = "everything")
+
+cm
+```
+
+
+To easily visualize these results, we can now plot the true positive rate (sensitivity) versus the false positive rate (1 - specificity):
+```{r}
+library(tidyverse)
+
+data.frame(cm$byClass) %>%
+  mutate(class = sub("Class: ", "", rownames(cm$byClass))) %>%
+  ggplot() + 
+  geom_point(aes(1 - Specificity, Sensitivity, 
+                 size = Detection.Rate,
+                 fill = class),
+             shape = 21) + 
+  scale_fill_manual(values = metadata(sce2)$color_vectors$celltype) +
+  theme_classic(base_size = 15) + 
+  ylab("Sensitivity (TPR)") +
+  xlab("1 - Specificity (FPR)")
+```
+
+We observe high sensitivity and specificity for most cell types. CD14+CD11c+ and CD3+CD8a+ show the lowest true positive rate with low percentage being sufficiently high. The size of the circle specifies the number of cells per class.
+
+Finally, to observe which cell phenotypes were wrongly classified, we can visualize the distribution of classification probabilities per cell phenotype class. The boxplots indicate the classification probabilities per class. The classifier is well trained if classification probabilities are only high for the one specific class:
+```{r}
+cur_pred <- predict(rffit, 
+                    newdata = cur_mat, 
+                    type = "prob")
+cur_pred$truth <- factor(test_sce2$cell_labels)
+
+cur_pred %>%
+  pivot_longer(cols = "CD14+CD11c+":"CD45+") %>%
+  ggplot() +
+  geom_boxplot(aes(x = name, y = value, fill = name), outlier.size = 0.5) +
+  facet_wrap(. ~ truth, ncol = 1) + 
+  scale_fill_manual(values = metadata(sce2)$color_vectors$celltype)  +
+  theme(panel.background = element_blank(), 
+        axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+*Classification of new data (9.3.6)*
+```{r}
+# Select unlabeled data
+cur_mat <- t(assay(unlab_sce2, "exprs")[rowData(unlab_sce2)$use_channel,])
+
+# Predict cell phenotypes
+cell_class <- as.character(predict.train(rffit, 
+                                         newdata = cur_mat, 
+                                         type = "raw"))
+names(cell_class) <- rownames(cur_mat)
+
+table(cell_class)
+```
+
+
+```{r}
+# Extract classification probabilities
+cell_prob <- predict.train(rffit, 
+                           newdata = cur_mat, 
+                           type = "prob")
+```
+
+
+Each cell is assigned to the class with highest probability. There are however cases, where the highest probability is low meaning the cell can not be uniquely assigned to a class. We next want to identify these cells and label them as “undefined”. Here, we select a maximum classification probability threshold of 40% but this threshold needs to be adjusted for other datasets. The adjusted cell labels are then stored in the SpatialExperiment object.
+```{r}
+library(ggridges)
+
+# Distribution of maximum probabilities
+tibble(max_prob = rowMax(as.matrix(cell_prob)),
+       type = cell_class) %>%
+    ggplot() +
+        geom_density_ridges(aes(x = max_prob, y = cell_class, fill = cell_class)) +
+        scale_fill_manual(values = metadata(sce2)$color_vectors$celltype) +
+        theme_classic(base_size = 15) +
+        xlab("Maximum probability") +
+        ylab("Cell type") + 
+        xlim(c(0,1.2))
+```
+
+
+```{r}
+# Label undefined cells
+cell_class[rowMax(as.matrix(cell_prob)) < 0.4] <- "undefined"
+
+# Store labels in SpatialExperiment onject
+cell_labels <- sce2$cell_labels
+cell_labels[colnames(unlab_sce2)] <- cell_class
+sce2$celltype <- cell_labels 
+
+table(sce2$celltype, sce2$sample_id)
+```
+
+
+
+We can now compare the cell labels derived by classification to the different clustering strategies. The first comparison is against the clustering results using the asinh-transformed counts.
+```{r}
+library(pheatmap)
+library(viridis)
+tab1 <- table(sce2$celltype, 
+              paste("Rphenograph", sce2$pg_clusters))
+
+
+pheatmap(log10(tab1 + 10), color = viridis(100))
+```
+
+
+We next compare the cell classification against clustering results using the integrated cells.
+```{r}
+tab1 <- table(sce2$celltype, 
+              paste("Rphenograph", sce2$pg_clusters_corrected))
+
+pheatmap(log10(tab1 + 10), color = viridis(100))
+```
+
+
+
+##Single Cell Visualization (Section 10)## 
+
+Smooth muscle cells (aSMA+) are not immune cells. 
+
+Endothelial cells (CD31+) do have immune properties (https://jhoonline.biomedcentral.com/articles/10.1186/1756-8722-6-61#:~:text=Endothelial%20cells%20are%20conditional%20innate%20immune%20cells.&text=In%20response%20to%20these%20stimuli,endothelial%20antigens%20to%20immune%20cells.)
+
+Pan-actin+
+
+Epithelial cells (pan-keratin+)
+
+Fibroblasts (vimentin+)
+
+**Load data (10.1)**
+
+```{r}
+#define cell type markers
+immunetype_markers<- c("CD3-170Er","CD8a-162Dy","CD11c-154Sm","CD14-144Nd","CD15-149Sm","CD20-161Dy","CD45-152Sm",
+                       "CD68-159Tb")
+
+#define cell state markers
+immunestate_markers<- c("CD49a-174Yb","CD69-160Gd","CD103-150Nd","GranzymeB-167Er")
+
+#define non immune markers
+nonimmune_markers<- c("aSMA-141Pr","CD31-151Eu","Pan-Actin-175Lu","Pan-Cytokeratin-148Nd","Vimentin-143Nd")
+
+#Add to sce
+rowData(sce2)$marker_class <- ifelse(rownames(sce2) %in% immunetype_markers, "immunetype",
+                                    ifelse(rownames(sce2) %in% immunestate_markers, "immunestate",
+                                    ifelse(rownames(sce2) %in% nonimmune_markers, "nonimmune",
+                                    "other")))
+
+rowData(sce2)$marker_class
+metadata(sce2)$color_vectors
+sce2
+```
+
+
+**Cell-type level (10.2)**
+
+*Dimensionality reduction visualization (10.2.1)*
+
+```{r}
+library(dittoSeq)
+library(scater)
+library(patchwork)
+library(cowplot)
+library(viridis)
+
+```
+
+
+```{r}
+## UMAP colored by cell type and expression - dittoDimPlot
+p1 <- dittoDimPlot(sce2, var = "celltype", 
+             reduction.use = "UMAP_mnnCorrected", size = 0.2,
+             do.label = TRUE, split.by = "sample_id") +
+  scale_color_manual(values = metadata(sce2)$color_vectors$celltype) +
+  theme(legend.title = element_blank()) +
+  ggtitle("Cell types on UMAP, integrated cells")
+
+p1
+
+p2 <- dittoDimPlot(sce2, var = "CD68-159Tb", assay = "exprs",
+             reduction.use = "UMAP_mnnCorrected", size = 0.2, 
+             do.label = TRUE, split.by = "sample_id") +
+    scale_color_viridis(name = "CD68-159Tb", option = "B")
+
+p2
+p1 + p2
+```
+
+Remember: 
+immunetype_markers<- c("CD3-170Er","CD8a-162Dy","CD11c-154Sm","CD14-144Nd","CD15-149Sm","CD20-161Dy","CD45-152Sm",
+                       "CD68-159Tb")
+
+Remember: 
+immunestate_markers<- c("CD49a-174Yb","CD69-160Gd","CD103-150Nd","GranzymeB-167Er")
+
+Remember: 
+nonimmune_markers<- c("aSMA-141Pr","CD31-151Eu","Pan-Actin-175Lu","Pan-Cytokeratin-148Nd","Vimentin-143Nd")
+
+```{r}
+# UMAP colored by expression for all immune type markers - plotReducedDim
+plot_list  <- lapply(rownames(sce2)[rowData(sce2)$marker_class == "immunetype"], function(x){
+                      p <- plotReducedDim(sce2, dimred = "UMAP_mnnCorrected",
+                                          colour_by = x,
+                                          by_exprs_values = "exprs",
+                                          point_size = 0.2)
+                      return(p)
+                    })
+
+plot_grid(plotlist = plot_list)
+```
+
+
+```{r}
+# UMAP colored by expression for all immune state markers - plotReducedDim
+plot_list  <- lapply(rownames(sce2)[rowData(sce2)$marker_class == "immunestate"], function(x){
+                      p <- plotReducedDim(sce2, dimred = "UMAP_mnnCorrected",
+                                          colour_by = x,
+                                          by_exprs_values = "exprs",
+                                          point_size = 0.2)
+                      return(p)
+                    })
+
+plot_grid(plotlist = plot_list)
+```
+
+
+```{r}
+# UMAP colored by expression for all non immune markers - plotReducedDim
+plot_list  <- lapply(rownames(sce2)[rowData(sce2)$marker_class == "nonimmune"], function(x){
+                      p <- plotReducedDim(sce2, dimred = "UMAP_mnnCorrected",
+                                          colour_by = x,
+                                          by_exprs_values = "exprs",
+                                          point_size = 0.2)
+                      return(p)
+                    })
+
+plot_grid(plotlist = plot_list)
+```
+
+
+*Heatmap visualization (10.2.2)*
+
+cur_cells <- sample(seq_len(ncol(sce)), 250)
+cur_cells2 <- sample(seq_len(ncol(sce2)), 250)
+
+dittoHeatmap(sce2[,cur_cells2], 
+             genes = rownames(sce2)[rowData(sce2)$use_channel],
+             assay = "exprs", scale = "none",
+             heatmap.colors = viridis(100), 
+             annot.by = c("pg_clusters_corrected"),
+             annot.colors = c(metadata(sce2)$color_vectors$pgclusters_corrected))
+
+dittoHeatmap(sce2[,cur_cells2], 
+             genes = rownames(sce2)[rowData(sce2)$use_channelnoDNAICSKArXe],
+             assay = "exprs", scale = "none",
+             heatmap.colors = viridis(100), 
+             annot.by = c("pg_clusters_corrected"),
+             annot.colors = c(metadata(sce2)$color_vectors$pgclusters_corrected))
+             
+```{r}
+library(RColorBrewer)
+sample_id <- setNames(c(brewer.pal(6,"YlGn")[2:6],
+                        brewer.pal(6, "BuPu")[4:6]),
+                unique(sce2$sample_id))
+
+color_vectors$sample_id <- sample_id
+metadata(sce2)$color_vectors <- color_vectors
+metadata(sce2)$color_vectors
+```
+
+
+
+```{r}
+
+set.seed(220818)
+cur_cells <- sample(seq_len(ncol(sce2)), 100)
+
+
+#previously before the random forest, this is how the heatmap was. No ordering. Used n=250 cells.  
+dittoHeatmap(sce2[,cur_cells2], 
+             genes = rownames(sce2)[rowData(sce2)$use_channel],
+             assay = "exprs", scale = "none",
+             heatmap.colors = viridis(100), 
+             annot.by = c("pg_clusters_corrected"),
+             annot.colors = c(metadata(sce2)$color_vectors$pgclusters_corrected))
+
+#Heatmap visualization - DittoHeatmap...ordering by phenograph clusters
+dittoHeatmap(sce2[,cur_cells], genes = rownames(sce2)[rowData(sce2)$marker_class == "immunetype"],
+             assay = "exprs", order.by = c("pg_clusters_corrected"),
+             cluster_cols = FALSE, scale = "none",
+             heatmap.colors = viridis(100), annot.by = c("pg_clusters_corrected","sample_id"),
+             annotation_colors = list(sample_id = metadata(sce2)$color_vectors$sample_id,
+                                      pg_clusters_corrected = metadata(sce2)$color_vectors$pgclusters_corrected)
+             )
+
+
+dittoHeatmap(sce2[,cur_cells], genes = rownames(sce2)[rowData(sce2)$marker_class == "immunestate"],
+             assay = "exprs", order.by = c("pg_clusters_corrected"),
+             cluster_cols = FALSE, scale = "none",
+             heatmap.colors = viridis(100), annot.by = c("pg_clusters_corrected","sample_id"),
+             annotation_colors = list(sample_id = metadata(sce2)$color_vectors$sample_id,
+                                      pg_clusters_corrected = metadata(sce2)$color_vectors$pgclusters_corrected)
+             )
+
+dittoHeatmap(sce2[,cur_cells], genes = rownames(sce2)[rowData(sce2)$marker_class == "nonimmune"],
+             assay = "exprs", order.by = c("pg_clusters_corrected"),
+             cluster_cols = FALSE, scale = "none",
+             heatmap.colors = viridis(100), annot.by = c("pg_clusters_corrected","sample_id"),
+             annotation_colors = list(sample_id = metadata(sce2)$color_vectors$sample_id,
+                                      pg_clusters_corrected = metadata(sce2)$color_vectors$pgclusters_corrected)
+             )
+```
+
+Similarly, we can visualize the mean marker expression per phenograph cluster for all cells using aggregateAcrossCells from scuttle and then use dittoHeatmap. We will annotate the heatmap with the number of cells per cell type.
+```{r}
+library(scuttle)
+
+## by phenograph clusters
+immunetype_mean <- aggregateAcrossCells(as(sce2, "SingleCellExperiment"),  
+                     ids = sce2$pg_clusters_corrected, 
+                     statistics = "mean",
+                     use.assay.type = "exprs", 
+                     subset.row = rownames(sce2)[rowData(sce2)$marker_class == "immunetype"]
+                     )
+
+
+immunestate_mean <- aggregateAcrossCells(as(sce2, "SingleCellExperiment"),  
+                     ids = sce2$pg_clusters_corrected, 
+                     statistics = "mean",
+                     use.assay.type = "exprs", 
+                     subset.row = rownames(sce2)[rowData(sce2)$marker_class == "immunestate"]
+                     )
+
+nonimmune_mean <- aggregateAcrossCells(as(sce2, "SingleCellExperiment"),  
+                     ids = sce2$pg_clusters_corrected, 
+                     statistics = "mean",
+                     use.assay.type = "exprs", 
+                     subset.row = rownames(sce2)[rowData(sce2)$marker_class == "nonimmune"]
+                     )
+
+# No scaling
+dittoHeatmap(immunetype_mean,
+             assay = "exprs", cluster_cols = FALSE, 
+             scale = "none",
+             heatmap.colors = viridis(100),
+             annot.by = c("pg_clusters_corrected","ncells"),
+             annotation_colors = list(pg_clusters_corrected = metadata(sce2)$color_vectors$pgclusters_corrected,
+                                      ncells = plasma(100)))
+
+
+dittoHeatmap(immunestate_mean,
+             assay = "exprs", cluster_cols = FALSE, 
+             scale = "none",
+             heatmap.colors = viridis(100),
+             annot.by = c("pg_clusters_corrected","ncells"),
+             annotation_colors = list(pg_clusters_corrected = metadata(sce2)$color_vectors$pgclusters_corrected,
+                                      ncells = plasma(100)))
+
+dittoHeatmap(nonimmune_mean,
+             assay = "exprs", cluster_cols = FALSE, 
+             scale = "none",
+             heatmap.colors = viridis(100),
+             annot.by = c("pg_clusters_corrected","ncells"),
+             annotation_colors = list(pg_clusters_corrected = metadata(sce2)$color_vectors$pgclusters_corrected,
+                                      ncells = plasma(100)))
+
+```
+
+
+```{r}
+# Min-max expression scaling
+dittoHeatmap(immunetype_mean,
+             assay = "exprs", cluster_cols = TRUE, 
+             scaled.to.max = TRUE,
+             heatmap.colors.max.scaled = inferno(100),
+             annot.by = c("pg_clusters_corrected","ncells"),
+             annotation_colors = list(pg_clusters_corrected = metadata(sce2)$color_vectors$pgclusters_corrected,
+                                      ncells = plasma(100)))
+
+dittoHeatmap(immunestate_mean,
+             assay = "exprs", cluster_cols = TRUE, 
+             scaled.to.max = TRUE,
+             heatmap.colors.max.scaled = inferno(100),
+             annot.by = c("pg_clusters_corrected","ncells"),
+             annotation_colors = list(pg_clusters_corrected = metadata(sce2)$color_vectors$pgclusters_corrected,
+                                      ncells = plasma(100)))
+
+dittoHeatmap(nonimmune_mean,
+             assay = "exprs", cluster_cols = TRUE, 
+             scaled.to.max = TRUE,
+             heatmap.colors.max.scaled = inferno(100),
+             annot.by = c("pg_clusters_corrected","ncells"),
+             annotation_colors = list(pg_clusters_corrected = metadata(sce2)$color_vectors$pgclusters_corrected,
+                                      ncells = plasma(100)))
+```
+
+As illustrated above for not- and min-max-scaled expression values, different ways of scaling can have strong effects on visualization output and we encourage the user to test multiple options.
+
+
+*Violin plot visualization (10.2.3)*
+```{r}
+set.seed(220856)
+cur_cells <- sample(seq_len(ncol(sce2)), 1000)
+#Violin Plot - plotExpression
+plotExpression(sce2[,cur_cells], 
+               features = rownames(sce2)[rowData(sce2)$marker_class == "immunetype"],
+               x = "pg_clusters_corrected", exprs_values = "exprs", 
+               colour_by = "pg_clusters_corrected") +
+    theme(axis.text.x =  element_text(angle = 90))+
+    scale_color_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected)
+
+
+plotExpression(sce2[,cur_cells], 
+               features = rownames(sce2)[rowData(sce2)$marker_class == "immunestate"],
+               x = "pg_clusters_corrected", exprs_values = "exprs", 
+               colour_by = "pg_clusters_corrected") +
+    theme(axis.text.x =  element_text(angle = 90))+
+    scale_color_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected)
+
+
+plotExpression(sce2[,cur_cells], 
+               features = rownames(sce2)[rowData(sce2)$marker_class == "nonimmune"],
+               x = "pg_clusters_corrected", exprs_values = "exprs", 
+               colour_by = "pg_clusters_corrected") +
+    theme(axis.text.x =  element_text(angle = 90))+
+    scale_color_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected)
+
+plotExpression(sce2, 
+               features = rownames(sce2),
+               x = "pg_clusters_corrected", exprs_values = "exprs", 
+               colour_by = "pg_clusters_corrected") +
+    theme(axis.text.x =  element_text(angle = 90))+
+    scale_color_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected)
+```
+
+
+*Scatter plot visualization (10.2.4)*
+Moreover, a protein expression based scatter plot can be generated with dittoScatterPlot (returns a ggplot object). We
+overlay the plot with the cell type information.
+immunetype_markers<- c("CD3-170Er","CD8a-162Dy","CD11c-154Sm","CD14-144Nd","CD15-149Sm","CD20-161Dy","CD45-152Sm",
+                       "CD68-159Tb")
+This is a fail
+```{r}
+#Scatter plot
+dittoScatterPlot(sce2, 
+                 x.var = "CD3-170Er", y.var="CD20-161Dy", 
+                 assay.x = "exprs", assay.y = "exprs", 
+                 color.var = "pg_clusters_corrected") +
+    scale_color_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected) +
+    ggtitle("Scatterplot for CD3/CD20 labelled by Phenograph cluster")
+
+dittoScatterPlot(sce2, 
+                 x.var = "CD3-170Er", y.var="CD14-144Nd", 
+                 assay.x = "exprs", assay.y = "exprs", 
+                 color.var = "celltype") +
+    scale_color_manual(values = metadata(sce2)$color_vectors$celltype) +
+    ggtitle("Scatterplot for CD3/CD20 labelled by cell type")
+```
+
+
+*Bar plot visualization (10.2.5)*
+In order to display frequencies of phenograph clusters per sample/patient, the dittoBarPlot function will be used. Data can be represented as percentages or counts and again ggplot objects are outputted.
+
+
+```{r}
+#code below worked to filter specific pg cluster
+u <- filterSCE(sce2_cat, k = "pg_clusters_corrected",
+    cluster_id %in% c(2, 3, 5, 9, 13))
+plot_grid(
+    plotDR(sce2, color_by = "pg_clusters_corrected"),
+    plotDR(u, color_by = "pg_clusters_corrected"))
+
+#Filtering sce2 to only look at specific phenograph clusters -- this method preferred
+u <- sce2[,sce2$pg_clusters_corrected == "2"|sce2$pg_clusters_corrected == "3"|sce2$pg_clusters_corrected == "5"|sce2$pg_clusters_corrected == "9"|sce2$pg_clusters_corrected == "13"]
+u$pg_clusters_corrected <- droplevels(u$pg_clusters_corrected) #this drops unused levels
+```
+
+
+
+```{r}
+#Visualization of phenograph (pg_clusters_corrected) clusters from different samples using the main SCE dataset 
+
+a1<- dittoBarPlot(sce2, var = "pg_clusters_corrected", group.by = "sample_id", var.labels.reorder = c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15),retain.factor.levels = TRUE,xlab = "Sample") +
+    scale_fill_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected) +
+    scale_y_continuous(breaks = seq(0, 1, by = 0.25), labels = c('0', '25', '50', '75', '100'))
+a1
+
+#Filtering sce2 to only look at specific phenograph clusters 
+u <- sce2[,sce2$pg_clusters_corrected == "2"|sce2$pg_clusters_corrected == "3"|sce2$pg_clusters_corrected == "5"|sce2$pg_clusters_corrected == "9"|sce2$pg_clusters_corrected == "13"]
+u$pg_clusters_corrected <- droplevels(u$pg_clusters_corrected)
+
+#Visualization of filtered SCE object
+b1<- dittoBarPlot(u, var = "pg_clusters_corrected", group.by = "sample_id",retain.factor.levels = TRUE, xlab = "Sample") +
+    scale_fill_manual(values = metadata(u)$color_vectors$pgclusters_corrected) +
+    scale_y_continuous(breaks = seq(0, 1, by = 0.25), labels = c('0', '25', '50', '75', '100'))
+b1
+  
+```
+
+
+```{r}
+dittoFreqPlot(sce2, var = "pg_clusters_corrected", group.by = "sample_id", xlab = "Sample") +  
+    scale_fill_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected) +
+    scale_y_continuous(breaks = seq(0, 0.6, by = 0.1), labels = c('0', '10', '20', '30', '40','50','60'))
+
+dittoFreqPlot(u, var = "pg_clusters_corrected", group.by = "sample_id", xlab = "Sample") +
+    scale_fill_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected) +
+    scale_y_continuous(breaks = seq(0, 0.5, by = 0.1), labels = c('0', '10', '20', '30', '40','50'))
+```
+
+
+
+
+Other visualizations
+
+
+
+*CATALYST-based visualization (10.2.6)*
+In the following, we highlight some useful visualization functions from the CATALYST package.
+
+To this end, we will first convert the SpatialExperiment object into a CATALYST-compatible format.
+```{r}
+library(CATALYST)
+
+# save spe in CATALYST-compatible object with renamed colData entries and 
+# new metadata information
+sce2_cat <- sce2 
+
+sce2_cat$sample_id <- factor(sce2$sample_id)
+sce2_cat$cluster_id <- factor(sce2$pg_clusters_corrected)
+
+#add cluster information to metadata
+metadata(sce2_cat)$cluster_codes <- data.frame(pg_clusters_corrected = factor(sce2$pg_clusters_corrected))
+```
+
+
+10.2.6.1 Pseudobulk-level MDS plot
+Pseudobulk-level multi-dimensional scaling (MDS) plots can be rendered with the exported pbMDS function.
+
+Here, we will use pbMDS to highlight expression similarities between cell types and subsequently for each celltype-sample-combination.
+```{r}
+# MDS pseudobulk by phenograph cluster
+pbMDS(sce2_cat, by = "cluster_id", 
+      features = rownames(sce2_cat)[rowData(sce2_cat)$marker_class == "immunetype"], 
+      label_by = "cluster_id", k = "pg_clusters_corrected") +
+  scale_color_manual(values = metadata(sce2_cat)$color_vectors$pgclusters_corrected)
+
+pbMDS(sce2_cat, by = "cluster_id", 
+      features = rownames(sce2_cat)[rowData(sce2_cat)$marker_class == "immunestate"], 
+      label_by = "cluster_id", k = "pg_clusters_corrected") +
+  scale_color_manual(values = metadata(sce2_cat)$color_vectors$pgclusters_corrected)
+```
+
+
+```{r}
+# MDS pseudobulk by phenograph cluster and sample_id
+pbMDS(sce2_cat, by = "both", 
+      features = rownames(sce2_cat)[rowData(sce2_cat)$marker_class == "immunetype"], 
+      k = "pg_clusters_corrected", shape_by = "sample_id", 
+      size_by = TRUE) +
+  scale_color_manual(values = metadata(sce2_cat)$color_vectors$pgclusters_corrected)
+
+pbMDS(sce2_cat, by = "both", 
+      features = rownames(sce2_cat)[rowData(sce2_cat)$marker_class == "immunestate"], 
+      k = "pg_clusters_corrected", shape_by = "sample_id", 
+      size_by = TRUE) +
+  scale_color_manual(values = metadata(sce2_cat)$color_vectors$pgclusters_corrected)
+```
+
+
+10.2.6.2 Reduced dimension plot on CLR of proportions
+The clrDR function produces dimensionality reduction plots on centered log-ratios (CLR) of sample/cell type proportions across cell type/samples.
+
+As with pbMDS, the output plots aim to illustrate the degree of similarity between cell types based on sample proportions.
+```{r}
+# CLR on cluster proportions across samples
+clrDR(sce2_cat, dr = "PCA", 
+      by = "cluster_id", k = "pg_clusters_corrected", 
+      label_by = "cluster_id", arrow_col = "sample_id", 
+      point_pal = metadata(sce2_cat)$color_vectors$pgclusters_corrected) +
+  scale_color_manual(values = metadata(sce2_cat)$color_vectors$sample_id)
+```
+
+
+10.2.6.3 Pseudobulk expression boxplot
+The plotPbExprs generates combined box- and jitter-plots of aggregated marker expression per phenograph cluster. Here, we further split the data by cancer type.
+```{r}
+plotPbExprs(sce2_cat, k = "pg_clusters_corrected", 
+            facet_by = "cluster_id", ncol = 4, 
+            features = rownames(sce2_cat)[rowData(sce2_cat)$marker_class == "immunetype"]) 
+```
+
+
+
+**Sample level (10.3)**
+In the next section, we will shift the grouping-level focus from the cell type to the sample-level. Sample-levels will be further divided into the sample-(image) and patient-level.
+
+Although we will mostly repeat the functions from the previous section 10.2, sample- and patient-level centered visualization can provide additional quality control and biological interpretation.
+
+*Dimensionality reduction visualization (10.3.1)*
+As illustrated in Section 8, we see that the fastMNN approach (right side of the plot) leads to mixing of cells across samples/patients and thus batch effect correction.
+```{r}
+## UMAP colored by cell type and expression - dittoDimPlot
+p1 <- dittoDimPlot(sce2, var = "sample_id",
+             reduction.use = "UMAP", size = 0.2, 
+             colors = viridis(100), do.label = FALSE) +
+    scale_color_manual(values = metadata(sce2)$color_vectors$sample_id) +
+  theme(legend.title = element_blank()) +
+  ggtitle("Sample ID")
+
+p2 <- dittoDimPlot(sce2, var = "sample_id",
+             reduction.use = "UMAP_mnnCorrected", size = 0.2, 
+             colors = viridis(100), do.label = FALSE) +
+    scale_color_manual(values = metadata(sce2)$color_vectors$sample_id) +
+  theme(legend.title = element_blank()) +
+  ggtitle("Sample ID")
+
+
+(p1 + p2) 
+```
+
+
+*Heatmap visualization (10.3.2)*
+
+```{r}
+#Heatmap visualization - DittoHeatmap...ordering by sample id
+dittoHeatmap(sce2[,cur_cells], genes = rownames(sce2)[rowData(sce2)$marker_class == "immunetype"],
+             assay = "exprs", order.by = c("sample_id"),
+             cluster_cols = FALSE, scale = "none",
+             heatmap.colors = viridis(100), 
+             annot.by = c("pg_clusters_corrected","sample_id"),
+             annotation_colors = list(pg_clusters_corrected = metadata(sce2)$color_vectors$pgclusters_corrected,
+                                      sample_id = metadata(sce2)$color_vectors$sample_id))
+```
+
+As in Section 7.3, aggregated mean marker expression per sample/patient allow identification of samples/patients with outlying expression patterns.
+
+Here, we will focus on the patient level and use aggregateAcrossCells and dittoHeatmap. The heatmap will be annotated with the number of cells per patient and cancer type and displayed using two scaling options.
+```{r}
+#by sample_id
+sampleimmunetype_mean <- aggregateAcrossCells(as(sce2, "SingleCellExperiment"),  
+                     ids = sce2$sample_id, 
+                     statistics = "mean",
+                     use.assay.type = "exprs", 
+                     subset.row = rownames(sce2)[rowData(sce2)$marker_class == "immunetype"]
+                     )
+
+sampleimmunestate_mean <- aggregateAcrossCells(as(sce2, "SingleCellExperiment"),  
+                     ids = sce2$sample_id, 
+                     statistics = "mean",
+                     use.assay.type = "exprs", 
+                     subset.row = rownames(sce2)[rowData(sce2)$marker_class == "immunestate"]
+                     )
+
+samplenonimmune_mean <- aggregateAcrossCells(as(sce2, "SingleCellExperiment"),  
+                     ids = sce2$sample_id, 
+                     statistics = "mean",
+                     use.assay.type = "exprs", 
+                     subset.row = rownames(sce2)[rowData(sce2)$marker_class == "nonimmune"]
+                     )
+
+# No scaling
+dittoHeatmap(sampleimmunetype_mean,
+             assay = "exprs", cluster_cols = FALSE, 
+             scale = "none",
+             heatmap.colors = viridis(100),
+             annot.by = c("sample_id","ncells"),
+             annotation_colors = list(sample_id = metadata(sce2)$color_vectors$sample_id,
+                                      ncells = plasma(100)))
+
+dittoHeatmap(sampleimmunestate_mean,
+             assay = "exprs", cluster_cols = FALSE, 
+             scale = "none",
+             heatmap.colors = viridis(100),
+             annot.by = c("sample_id","ncells"),
+             annotation_colors = list(sample_id = metadata(sce2)$color_vectors$sample_id,
+                                      ncells = plasma(100)))
+
+dittoHeatmap(samplenonimmune_mean,
+             assay = "exprs", cluster_cols = FALSE, 
+             scale = "none",
+             heatmap.colors = viridis(100),
+             annot.by = c("sample_id","ncells"),
+             annotation_colors = list(sample_id = metadata(sce2)$color_vectors$sample_id,
+                                      ncells = plasma(100)))
+```
+
+
+```{r}
+# Min-max expression scaling
+dittoHeatmap(sampleimmunetype_mean,
+             assay = "exprs", cluster_cols = TRUE, 
+             scaled.to.max =  TRUE,
+             heatmap.colors.max.scaled = inferno(100),
+             annot.by = c("sample_id","ncells"),
+             annotation_colors = list(sample_id = metadata(sce2)$color_vectors$sample_id,
+                                      ncells = plasma(100)))
+
+
+dittoHeatmap(sampleimmunestate_mean,
+             assay = "exprs", cluster_cols = TRUE, 
+             scaled.to.max =  TRUE,
+             heatmap.colors.max.scaled = inferno(100),
+             annot.by = c("sample_id","ncells"),
+             annotation_colors = list(sample_id = metadata(sce2)$color_vectors$sample_id,
+                                      ncells = plasma(100)))
+
+dittoHeatmap(samplenonimmune_mean,
+             assay = "exprs", cluster_cols = TRUE, 
+             scaled.to.max =  TRUE,
+             heatmap.colors.max.scaled = inferno(100),
+             annot.by = c("sample_id","ncells"),
+             annotation_colors = list(sample_id = metadata(sce2)$color_vectors$sample_id,
+                                      ncells = plasma(100)))
+```
+
+
+
+*Barplot visualization (10.3.3)*
+
+sce2 <- sce[,sce$s.area >= 5]
+sce <- sce[,grep('WT',colnames(sce))]
+
+```{r}
+#code below worked to filter specific pg cluster
+u <- filterSCE(sce2_cat, k = "pg_clusters_corrected",
+    cluster_id %in% c(2, 3, 5, 9, 13))
+plot_grid(
+    plotDR(sce2, color_by = "pg_clusters_corrected"),
+    plotDR(u, color_by = "pg_clusters_corrected"))
+
+#Filtering sce2 to only look at specific phenograph clusters -- this method preferred
+u <- sce2[,sce2$pg_clusters_corrected == "2"|sce2$pg_clusters_corrected == "3"|sce2$pg_clusters_corrected == "5"|sce2$pg_clusters_corrected == "9"|sce2$pg_clusters_corrected == "13"]
+u$pg_clusters_corrected <- droplevels(u$pg_clusters_corrected) #this drops unused levels
+
+```
+
+
+
+```{r}
+
+#Visualization of phenograph (pg_clusters_corrected) clusters from different samples using the main SCE dataset 
+a<- dittoBarPlot(sce2, var = "sample_id", group.by = "pg_clusters_corrected",x.reorder = c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15),retain.factor.levels = TRUE, x.labels.rotate = FALSE,xlab = "PhenoGraph clusters") +
+    scale_fill_manual(values = metadata(sce2)$color_vectors$sample_id) +
+    scale_y_continuous(breaks = seq(0, 1, by = 0.25), labels = c('0', '25', '50', '75', '100'))
+a
+
+#Filtering sce2 to only look at specific phenograph clusters 
+u <- sce2[,sce2$pg_clusters_corrected == "2"|sce2$pg_clusters_corrected == "3"|sce2$pg_clusters_corrected == "5"|sce2$pg_clusters_corrected == "9"|sce2$pg_clusters_corrected == "13"]
+u$pg_clusters_corrected <- droplevels(u$pg_clusters_corrected)
+
+#Visualization of filtered SCE object
+dittoBarPlot(u, var = "sample_id", group.by = "pg_clusters_corrected",retain.factor.levels = TRUE,x.labels.rotate = FALSE, xlab = "PhenoGraph clusters of interest",ylab = "Proportion (% of cells)") +
+    scale_fill_manual(values = metadata(u)$color_vectors$sample_id) +
+    scale_y_continuous(breaks = seq(0, 1, by = 0.25), labels = c('0', '25', '50', '75', '100'))
+
+```
+
+
+
+
+```{r}
+dittoFreqPlot(sce2, var = "sample_id", group.by = "pg_clusters_corrected",x.labels.rotate = FALSE, xlab = "PhenoGraph clusters") +  
+    scale_fill_manual(values = metadata(sce2)$color_vectors$sample_id) +
+    scale_y_continuous(breaks = seq(0, 0.5, by = 0.1), labels = c('0', '10', '20', '30', '40','50'))
+
+dittoFreqPlot(u, var = "sample_id", group.by = "pg_clusters_corrected",x.labels.rotate = FALSE, xlab = "PhenoGraph clusters of interest") +
+    scale_fill_manual(values = metadata(sce2)$color_vectors$sample_id) +
+    scale_y_continuous(breaks = seq(0, 0.5, by = 0.1), labels = c('0', '10', '20', '30', '40','50'))
+```
+
+
+
+
+metadata(sce2_cat)$cluster_codes
+scale_color_manual(values = metadata(sce2_cat)$color_vectors$pgclusters_corrected)
+```{r}
+names(cluster_codes(sce2_cat))
+
+
+plotAbundances(u, k = "pg_clusters_corrected", by = "sample_id")
+plotAbundances(sce2_cat, k="pg_clusters_corrected", by="cluster_id",group_by = "sample_id") +
+  scale_color_manual(values = metadata(sce2_cat)$color_vectors$sample_id)
+
+plotAbundances(sce2_cat, k="pg_clusters_corrected", by="sample_id", group_by = "sample_id", k_pal = metadata(sce2_cat)$color_vectors$pgclusters_corrected) 
+
+names(colData(sce2_cat))
+```
+
+
+
+*CATALYST-based visualization (10.3.4)*
+
+10.3.4.1 Pseudobulk-level MDS plot
+```{r}
+# MDS pseudobulk by sample_id 
+pbMDS(sce2_cat, by = "sample_id", 
+      color_by = "sample_id", 
+      features = rownames(sce2_cat)[rowData(sce2_cat)$marker_class == "immunetype"]) +
+  scale_color_manual(values = metadata(sce2_cat)$color_vectors$sample_id)
+
+# MDS pseudobulk by sample_id 
+pbMDS(sce2_cat, by = "sample_id", 
+      color_by = "sample_id", 
+      features = rownames(sce2_cat)[rowData(sce2_cat)$marker_class == "immunestate"]) +
+  scale_color_manual(values = metadata(sce2_cat)$color_vectors$sample_id)
+
+```
+
+
+10.3.4.2 Reduced dimension plot on CLR of proportions
+```{r}
+# CLR on sample proportions across clusters
+clrDR(sce2_cat, dr = "PCA", 
+      by = "sample_id", point_col = "sample_id",
+      k = "pg_clusters_corrected", point_pal = metadata(sce2_cat)$color_vectors$sample_id) +
+  scale_color_manual(values = metadata(sce2_cat)$color_vectors$pgclusters_corrected)
+```
+
+
+**Other examples - complexheatmap (10.4)**
+
+
+
+
+##Image Visualization (Section 11)## 
+
+**Pixels visualization (11.1)**
+```{r}
+library(SpatialExperiment)
+library(cytomapper)
+
+# Sample images
+set.seed(220517)
+cur_id <- sample(unique(sce2$sample_id), 8)
+cur_images <- allimages[names(allimages) %in% cur_id]
+cur_masks <- allmasks[names(allmasks) %in% cur_id]
+
+```
+
+
+```{r}
+#Sample image 1
+set.seed(20)
+cur_id1 <- sample(unique(sce2$sample_id), 1)
+cur_images1 <- allimages[names(allimages) %in% cur_id1]
+cur_masks1 <- allmasks[names(allmasks) %in% cur_id1]
+```
+
+
+
+```{r}
+plotPixels(cur_images, 
+           colour_by = "CD11c-154Sm",
+           colour = list("CD11c-154Sm"=c("black", "yellow")),
+           bcg = list("CD11c-154Sm" = c(0, 1, 1)))
+
+plotPixels(cur_images, 
+           colour_by = "aSMA-141Pr",
+           colour = list("aSMA-141Pr"=c("black", "blue")),
+           bcg = list("aSMA-141Pr" = c(0, 1, 1)))
+
+plotPixels(cur_images, 
+           colour_by = "Pan-Actin-175Lu",
+           colour = list("Pan-Actin-175Lu"=c("black", "red")),
+           bcg = list("Pan-Actin-175Lu" = c(0, 1, 1)))
+
+plotPixels(cur_images, 
+           colour_by = "Vimentin-143Nd",
+           colour = list("Vimentin-143Nd"=c("black", "darkorange")),
+           bcg = list("Vimentin-143Nd" = c(0, 1, 1)))
+
+plotPixels(cur_images, 
+           colour_by = "CD31-151Eu",
+           colour = list("CD31-151Eu"=c("black", "green")),
+           bcg = list("CD31-151Eu" = c(0, 1, 1)))
+
+plotPixels(cur_images, 
+           colour_by = "Pan-Cytokeratin-148Nd",
+           colour = list("Pan-Cytokeratin-148Nd"=c("black", "purple")),
+           bcg = list("Pan-Cytokeratin-148Nd" = c(0, 1, 1)))
+
+
+                     
+```
+
+
+```{r}
+plotPixels(cur_images,
+           colour_by = c("aSMA-141Pr", "Pan-Actin-175Lu"),
+           colour = list("aSMA-141Pr"=c("black", "blue"), 
+                         "Pan-Actin-175Lu"=c("black", "red")), 
+           bcg = list("aSMA-141Pr" = c(0, 1, 1),
+                      "Pan-Actin-175Lu" = c(0, 1, 1)))
+
+plotPixels(cur_images,
+           colour_by = c("aSMA-141Pr", "Vimentin-143Nd"),
+           colour = list("aSMA-141Pr"=c("black", "blue"), 
+                         "Vimentin-143Nd"=c("black", "darkorange")), 
+           bcg = list("aSMA-141Pr" = c(0, 1, 1),
+                      "Vimentin-143Nd" = c(0, 1, 1)))
+
+plotPixels(cur_images,
+           colour_by = c("aSMA-141Pr", "CD31-151Eu"),
+           colour = list("aSMA-141Pr"=c("black", "blue"), 
+                         "CD31-151Eu"=c("black", "green")), 
+           bcg = list("aSMA-141Pr" = c(0, 1, 1),
+                      "CD31-151Eu" = c(0, 1, 1)))
+
+plotPixels(cur_images,
+           colour_by = c("Vimentin-143Nd", "CD31-151Eu"),
+           colour = list("Vimentin-143Nd"=c("black", "darkorange"), 
+                         "CD31-151Eu"=c("black", "green")), 
+           bcg = list("Vimentin-143Nd" = c(0, 1, 1),
+                      "CD31-151Eu" = c(0, 1, 1)))
+```
+
+
+
+```{r}
+plotPixels(cur_images,
+           missing_colour = "white",
+           colour_by = c("CD11c-154Sm", "CD103-150Nd", "aSMA-141Pr", "DNA1-191Ir"),
+           colour = list("CD11c-154Sm"=c("black", "yellow"), 
+                         "CD103-150Nd"=c("black", "red"), 
+                         "aSMA-141Pr"=c("black", "green"), 
+                         "DNA1-191Ir"=c("black", "blue")),
+           bcg = list("CD11c-154Sm" = c(0, 1, 1),
+                      "CD103-150Nd" = c(0, 1, 1),
+                      "aSMA-141Pr" = c(0, 1, 1),
+                      "DNA1-191Ir" = c(0, 1, 1)))
+
+plotPixels(cur_images,
+           missing_colour = "white",
+           colour_by = c("CD11c-154Sm", "CD49a-174Yb", "aSMA-141Pr", "DNA1-191Ir"),
+           colour = list("CD11c-154Sm"=c("black", "yellow"), 
+                         "CD49a-174Yb"=c("black", "red"), 
+                         "aSMA-141Pr"=c("black", "green"), 
+                         "DNA1-191Ir"=c("black", "blue")),
+           bcg = list("CD11c-154Sm" = c(0, 1, 1),
+                      "CD49a-174Yb" = c(0, 1, 1),
+                      "aSMA-141Pr" = c(0, 1, 1),
+                      "DNA1-191Ir" = c(0, 1, 1)))
+
+plotPixels(cur_images,
+           missing_colour = "white",
+           colour_by = c("CD11c-154Sm", "CD69-160Gd", "aSMA-141Pr", "DNA1-191Ir"),
+           colour = list("CD11c-154Sm"=c("black", "yellow"), 
+                         "CD69-160Gd"=c("black", "red"), 
+                         "aSMA-141Pr"=c("black", "green"), 
+                         "DNA1-191Ir"=c("black", "blue")),
+           bcg = list("CD11c-154Sm" = c(0, 1, 1),
+                      "CD69-160Gd" = c(0, 1, 1),
+                      "aSMA-141Pr" = c(0, 1, 1),
+                      "DNA1-191Ir" = c(0, 1, 1)))
+
+plotPixels(cur_images,
+           missing_colour = "white",
+           colour_by = c("CD31-151Eu", "CD103-150Nd", "DNA1-191Ir"),
+           colour = list("CD31-151Eu"=c("black", "yellow"), 
+                         "CD103-150Nd"=c("black", "red"), 
+                         "DNA1-191Ir"=c("black", "blue")),
+           bcg = list("CD31-151Eu" = c(0, 5, 1),
+                      "CD103-150Nd" = c(0, 5, 1),
+                      "DNA1-191Ir" = c(0, 5, 1)))
+
+plotPixels(cur_images,
+           missing_colour = "white",
+           colour_by = c("CD31-151Eu", "CD103-150Nd", "DNA1-191Ir"),
+           colour = list("CD31-151Eu"=c("black", "yellow"), 
+                         "CD103-150Nd"=c("black", "red"), 
+                         "DNA1-191Ir"=c("black", "blue")),
+           display = "single",
+           bcg = list("CD31-151Eu" = c(0, 5, 1),
+                      "CD103-150Nd" = c(0, 5, 1),
+                      "DNA1-191Ir" = c(0, 5, 1)))
+```
+
+
+*Adjusting colours (11.1.1)*
+```{r}
+plotPixels(cur_images, 
+           colour_by = c("CD11c-154Sm", "CD69-160Gd", "CD103-150Nd"),
+           bcg = list("CD11c-154Sm" = c(0, 1, 1),
+                      "CD69-160Gd" = c(0, 1, 1),
+                      "CD103-150Nd" = c(0, 1, 1)),
+           colour = list("CD11c-154Sm" = c("black", "burlywood1"),
+                         "CD69-160Gd" = c("black", "cyan2"),
+                         "CD103-150Nd" = c("black", "firebrick1")))
+```
+
+
+*Image normalization (11.1.2)*
+As an alternative to setting the bcg parameter, images can first be normalized. Normalization here means to scale the pixel intensities per channel between 0 and 1 (or a range specified by the ft parameter in the normalize function). By default, the normalize function scales pixel intensities across all images contained in the CytoImageList object (separateImages = FALSE). Each individual channel is scaled independently (separateChannels = TRUE).
+
+After 0-1 normalization, maximum pixel intensities can be clipped to enhance the contrast of the image (setting the inputRange parameter). In the following example, the clipping to 0 and 0.2 is the same as multiplying the pixel intensities by a factor of 5.
+```{r}
+# 0 - 1 channel scaling across all images
+norm_images <- cytomapper::normalize(cur_images)
+
+# Clip channel at 0.2
+norm_images <- cytomapper::normalize(norm_images, inputRange = c(0, 0.2))
+
+plotPixels(norm_images, 
+           colour_by = c("CD11c-154Sm", "CD69-160Gd", "CD103-150Nd"),
+           bcg = list("CD11c-154Sm" = c(0, 1, 1),
+                      "CD69-160Gd" = c(0, 1, 1),
+                      "CD103-150Nd" = c(0, 1, 1)),
+           colour = list("CD11c-154Sm" = c("black", "yellow"),
+                         "CD69-160Gd" = c("black", "blue"),
+                         "CD103-150Nd" = c("black", "red")))
+```
+
+
+The default setting of scaling pixel intensities across all images ensures comparable intensity levels across images. Pixel intensities can also be scaled per image therefore correcting for staining/expression differences between images:
+```{r}
+# 0 - 1 channel scaling per image
+norm_images <- cytomapper::normalize(cur_images, separateImages = TRUE)
+
+# Clip channel at 0.2
+norm_images <- cytomapper::normalize(norm_images, inputRange = c(0, 0.2))
+
+plotPixels(norm_images, 
+           colour_by = c("CD11c-154Sm", "CD69-160Gd", "CD103-150Nd"),
+           bcg = list("CD11c-154Sm" = c(0, 1, 1),
+                      "CD69-160Gd" = c(0, 1, 1),
+                      "CD103-150Nd" = c(0, 1, 1)),
+           colour = list("CD11c-154Sm" = c("black", "yellow"),
+                         "CD69-160Gd" = c("black", "blue"),
+                         "CD103-150Nd" = c("black", "red")))
+```
+
+
+
+**Cells visualization (11.2)**
+
+*Visualizing metadata (11.2.1)*
+The cytomapper package provides the plotCells function that accepts a CytoImageList object containing segmentation masks. These are defined as single channel images where sets of pixels with the same integer ID identify individual cells. This integer ID can be found as an entry in the colData(spe) slot and as pixel information in the segmentation masks. The entry in colData(spe) needs to be specified via the cell_id argument to the plotCells function. In that way, data contained in the SpatialExperiment object can be mapped to segmentation masks. For the current dataset, the cell IDs are stored in colData(spe)$ObjectNumber.
+
+As cell IDs are only unique within a single image, plotCells also requires the img_id argument. This argument specifies the colData(spe) as well as the mcols(masks) entry that stores the unique image name from which each cell was extracted. In the current dataset the unique image names are stored in colData(spe)$sample_id and mcols(masks)$sample_id.
+
+Providing these two entries that allow mapping between the SpatialExperiment object and segmentation masks, we can now color individual cells based on their cell type:
+```{r}
+
+plotCells(cur_masks,
+          object = sce2, 
+          cell_id = "object_id", img_id = "sample_id",
+          colour_by = "pg_clusters_corrected",
+          colour = list(pg_clusters_corrected = metadata(sce2)$color_vectors$pgclusters_corrected))
+```
+
+
+```{r}
+metadata(sce2)$color_vectors
+```
+
+
+```{r}
+pgcluster <- sce2[,sce2$pg_clusters_corrected == "5"|sce2$pg_clusters_corrected == "9"]
+
+plotCells(cur_masks,
+          object = pgcluster, 
+          cell_id = "object_id", img_id = "sample_id",
+          colour_by = "pg_clusters_corrected",
+          colour = list(pg_clusters_corrected = c("5"= "darkorange","9"="pink","15"="turquoise1"),"3"="blue",
+                        "13"="greenyellow","2"="red"),
+          missing_colour = "white")
+
+
+#one at a time
+pgcluster <- sce2[,sce2$pg_clusters_corrected == "13"]
+plotCells(cur_masks,
+          object = pgcluster, 
+          cell_id = "object_id", img_id = "sample_id",
+          colour_by = "pg_clusters_corrected",
+          colour = list(pg_clusters_corrected = c("13"= "greenyellow")),
+          missing_colour = "white",
+          image_title = NULL)
+
+
+
+```
+
+
+
+
+```{r}
+#aSMA and pan-actin
+plotPixels(image = cur_images,
+           mask = cur_masks,
+           object = pgcluster, 
+           cell_id = "object_id", img_id = "sample_id",
+           colour_by = c("aSMA-141Pr","Pan-Actin-175Lu"),
+           outline_by = "pg_clusters_corrected",
+           bcg = list("aSMA-141Pr" = c(0, 1, 1),
+                      "Pan-Actin-175Lu" = c(0,1,1)),
+           colour = list(pg_clusters_corrected = c("13" = "white"),
+                         "aSMA-141Pr"=c("black","blue"),
+                         "Pan-Actin-175Lu"=c("black","red")),
+           thick = TRUE)
+
+#aSMA and Vimentin
+plotPixels(image = cur_images,
+           mask = cur_masks,
+           object = pgcluster, 
+           cell_id = "object_id", img_id = "sample_id",
+           colour_by = c("aSMA-141Pr","Vimentin-143Nd"),
+           outline_by = "pg_clusters_corrected",
+           bcg = list("aSMA-141Pr" = c(0, 1, 1),
+                      "Vimentin-143Nd" = c(0,1,1)),
+           colour = list(pg_clusters_corrected = c("13" = "white"),
+                         "aSMA-141Pr"=c("black","blue"),
+                         "Vimentin-143Nd"=c("black","darkorange")),
+           thick = TRUE)
+
+
+#aSMA and CD31
+plotPixels(image = cur_images,
+           mask = cur_masks,
+           object = pgcluster, 
+           cell_id = "object_id", img_id = "sample_id",
+           colour_by = c("aSMA-141Pr","CD31-151Eu"),
+           outline_by = "pg_clusters_corrected",
+           bcg = list("aSMA-141Pr" = c(0, 1, 1),
+                      "CD31-151Eu" = c(0,1,1)),
+           colour = list(pg_clusters_corrected = c("13" = "white"),
+                         "aSMA-141Pr"=c("black","blue"),
+                         "CD31-151Eu"=c("black","green")),
+           thick = TRUE)
+
+#Vimentin and CD31
+plotPixels(image = cur_images,
+           mask = cur_masks,
+           object = pgcluster, 
+           cell_id = "object_id", img_id = "sample_id",
+           colour_by = c("Vimentin-143Nd","CD31-151Eu"),
+           outline_by = "pg_clusters_corrected",
+           bcg = list("Vimentin-143Nd" = c(0, 1, 1),
+                      "CD31-151Eu" = c(0,1,1)),
+           colour = list(pg_clusters_corrected = c("13" = "white"),
+                         "Vimentin-143Nd"=c("black","darkorange"),
+                         "CD31-151Eu"=c("black","green")),
+           thick = TRUE)
+
+```
+
+
+
+```{r}
+plotCells(cur_masks,
+          object = sce2, 
+          cell_id = "object_id", 
+          img_id = "sample_id",
+          colour_by = "pg_clusters_corrected",
+          colour = list(celltype = metadata(sce2)$color_vectors$pgclusters_corrected))
+```
+
+
+
+
+*Visualizing expression (11.2.2)*
+
+Similar to visualizing single-cell metadata on segmentation masks, we can use the plotCells function to visualize the aggregated pixel intensities per cell. In the current dataset pixel intensities were aggregated by computing the mean pixel intensity per cell and per channel. The plotCells function accepts the exprs_values argument (default counts) that allows selecting the assay which stores the expression values that should be visualized.
+
+
+```{r}
+plotCells(cur_masks,
+          object = sce2, 
+          cell_id = "object_id", img_id = "sample_id",
+          colour_by = c("CD11c-154Sm", "CD103-150Nd", "aSMA-141Pr", "DNA1-191Ir"),
+          colour = list("CD11c-154Sm"=c("black", "yellow"), 
+                         "CD103-150Nd"=c("black", "red"), 
+                         "aSMA-141Pr"=c("black", "green"), 
+                         "DNA1-191Ir"=c("black", "blue")))
+
+
+plotCells(cur_masks,
+          object = sce2, 
+          cell_id = "object_id", img_id = "sample_id",
+          colour_by = c("CD31-151Eu", "CD103-150Nd", "DNA1-191Ir"),
+          colour = list("CD31-151Eu"=c("black", "yellow"), 
+                         "CD103-150Nd"=c("black", "red"), 
+                         "DNA1-191Ir"=c("black", "blue")))
+```
+
+
+In the following example, we visualize the asinh-transformed mean pixel intensities of the CD11c marker on segmentation masks. This doesn't look the best imho...
+```{r}
+plotCells(cur_masks,
+          object = sce2, 
+          cell_id = "object_id", img_id = "sample_id",
+          colour_by = "CD11c-154Sm",
+          exprs_values = "exprs",
+          colour = list("CD11c-154Sm" = c("black", "yellow")))
+
+#example code
+plotCells(cur_masks,
+          object = spe, 
+          cell_id = "ObjectNumber", img_id = "sample_id",
+          colour_by = c("Ecad", "CD3", "CD20"),
+          exprs_values = "exprs",
+          colour = list(Ecad = c("black", "burlywood1"),
+                          CD3 = c("black", "cyan2"),
+                          CD20 = c("black", "firebrick1")))
+```
+
+
+*Outlining cells on images (11.2.3)*
+
+The following section highlights the combined visualization of pixel- and cell-level information at once. For this, besides the SpatialExperiment object, the plotPixels function accepts two CytoImageList objects. One for the multi-channel images and one for the segmentation masks. By specifying the outline_by parameter, the outlines of cells can now be colored based on their metadata.
+
+```{r}
+plotPixels(image = cur_images,
+           mask = cur_masks,
+           object = sce2, 
+           cell_id = "object_id", img_id = "sample_id",
+           colour_by = c("CD11c-154Sm", "aSMA-141Pr"),
+           outline_by = "pg_clusters_corrected",
+                      bcg = list("CD11c-154Sm" = c(0, 1, 1),
+                      "aSMA-141Pr" = c(0, 1, 1)),
+           colour = list(pg_clusters_corrected = metadata(sce2)$color_vectors$pgclusters_corrected),
+           thick = TRUE)
+```
+
+
+
+Distinguishing individual cell phenotypes is nearly impossible in the images above.
+
+However, the SpatialExperiment object can be subsetted to only contain cells of a single or few phenotypes. This allows the selective visualization of cell outlines on composite images.
+
+This type of visualization allows the quality control of two things: 1. segmentation quality of individual cell types can be checked and 2. cell phenotype quality can be visually assessed against expected marker expression.
+
+legend	
+a list specifying features of the legend. One or multiple of the following entries are supported:
+
+colour_by.title.font: numeric entry specifying the font of the legend title for features specified by colour_by.
+
+colour_by.title.cex: numeric entry specifying the size of the legend title for features specified by colour_by.
+
+colour_by.labels.cex: numeric entry specifying the size of the legend labels for features specified by colour_by.
+
+colour_by.legend.cex: (only discrete features) numeric entry specifying the size of the legend for features specified by colour_by.
+
+outline_by.title.font: numeric entry specifying the font of the legend title for features specified by outline_by.
+
+outline_by.title.cex: numeric entry specifying the size of the legend title for features specified by outline_by.
+
+outline_by.labels.cex: numeric entry specifying the size of the legend labels for features specified by outline_by.
+
+outline_by.legend.cex: (only discrete features) numeric entry specifying the size of the legend for features specified by outline_by.
+
+margin: numeric value indicating the margin (in pixels) between the legends and the outer boundary (default 2)
+
+This is the code to write: 
+legend = list(colour_by.title.cex = 0.3)
+
+```{r}
+
+pgcluster <- sce2[,sce2$pg_clusters_corrected == "13"]
+
+plotPixels(image = cur_images,
+           mask = cur_masks,
+           object = pgcluster, 
+           cell_id = "object_id", img_id = "sample_id",
+           colour_by = c("CD11c-154Sm", "aSMA-141Pr"),
+           outline_by = "pg_clusters_corrected",
+                      bcg = list("CD11c-154Sm" = c(0, 1, 1),
+                      "aSMA-141Pr" = c(0, 1, 1)),
+           colour = list(pg_clusters_corrected = c("13" = "white")),
+           thick = TRUE)
+```
+
+
+
+**Adjusting plot annotations (11.3)**
+The cytomapper package provides a number of function arguments to adjust the visual appearance of figures that are shared between the plotPixels and plotCells function.
+
+For a full overview of the arguments please refer to ?plotting-param.
+
+We use the following example to highlight how to adjust the scale bar, the image title, the legend appearance and the margin between images.
+```{r}
+?plotPixels()
+```
+
+
+
+**Displaying individual images (11.4)**
+By default, all images are displayed on the same graphics device. This can be useful when saving all images at once (see next section) to zoom into the individual images instead of opening each image individually. However, when displaying images in a markdown document these are more accessible when visualized individually. For this, the plotPixels and plotCells function accepts the display parameter that when set to "single" displays each resulting image in its own graphics device:
+
+
+
+##Spatial Analysis (Section 12)##
+
+**Spatial Interaction Graphs (12.1)**
+Many spatial analysis approaches either compare the observed versus expected number of cells around a given cell type (point process) or utilize interaction graphs (spatial object graphs) to estimate clustering or interaction frequencies between cell types.
+
+The steinbock framework allows the construction of these spatial graphs. During image processing (see Section 4.2), we have constructed a spatial graph by expanding the individual cell masks by 4 pixels.
+
+The imcRtools package further allows the ad hoc consctruction of spatial graphs directly using a SpatialExperiment or SingleCellExperiment object while considering the spatial location (centroids) of individual cells. The buildSpatialGraph function allows constructing spatial graphs by detecting the k-nearest neighbors in 2D (knn), by detecting all cells within a given distance to the center cell (expansion) and by Delaunay triangulation (delaunay).
+
+When constructing a knn graph, the number of neighbors (k) needs to be set and (optionally) the maximum distance to consider (max_dist) can be specified. When constructing a graph via expansion, the distance to expand (threshold) needs to be provided. For graphs constructed via Delaunay triangulation, the max_dist parameter can be set to avoid unusually large connections at the edge of the image.
+```{r}
+colData(sce2)
+```
+
+
+
+```{r}
+library(imcRtools)
+sce2 <- buildSpatialGraph(sce2, img_id = "sample_id", type = "knn", k = 20, coords = c("m.cx", "m.cy"))
+sce2 <- buildSpatialGraph(sce2, img_id = "sample_id", type = "expansion", threshold = 20, coords = c("m.cx", "m.cy"))
+sce2 <- buildSpatialGraph(sce2, img_id = "sample_id", type = "delaunay", max_dist = 50, coords = c("m.cx", "m.cy"))
+
+
+```
+
+
+The spatial graphs are stored in colPair(spe, name) slots. These slots store SelfHits objects representing edge lists in which the first column indicates the index of the “from” cell and the second column the index of the “to” cell. Each edge list is newly constructed when subsetting the object.
+```{r}
+colPairNames(sce2)
+
+#the following is from the steinbock mask generation
+colPair(sce2, "neighborhood")
+
+```
+
+
+**Spatial visualization (12.2)**
+
+Section 11 highlights the use of the cytomapper package to visualize multichannel images and segmentation masks. Here, we introduce the plotSpatial function of the imcRtools package to visualize the cells’ centroids and cell-cell interactions as spatial graphs.
+
+In the following example, we select one image for visualization purposes. Here, each dot (node) represents a cell and edges are drawn between cells in close physical proximity as detected by steinbock or the buildSpatialGraph function. Nodes are variably colored based on the cell type and edges are colored in grey.
+
+```{r}
+library(ggplot2)
+library(viridis)
+
+# steinbock interaction graph 
+plotSpatial(spe[,spe$sample_id == "Patient3_001"], 
+            node_color_by = "celltype", 
+            img_id = "sample_id", 
+            draw_edges = TRUE, 
+            colPairName = "neighborhood", 
+            nodes_first = FALSE, 
+            edge_color_fix = "grey") + 
+    scale_color_manual(values = metadata(spe)$color_vectors$celltype) +
+    ggtitle("steinbock interaction graph")
+
+```
+
+
+
+```{r}
+
+# knn interaction graph 
+plotSpatial(sce2[,sce2$sample_id == "Slide 3 ROI 2"], 
+            node_color_by = "pg_clusters_corrected", 
+            img_id = "sample_id", 
+            draw_edges = TRUE, 
+            colPairName = "knn_interaction_graph",
+            coords = c("m.cx", "m.cy"),
+            nodes_first = FALSE,
+            edge_color_fix = "grey") + 
+    scale_color_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected) +
+    ggtitle("knn interaction graph")
+```
+
+
+```{r}
+# expansion interaction graph 
+plotSpatial(sce2[,sce2$sample_id == "Slide 3 ROI 2"], 
+            node_color_by = "pg_clusters_corrected", 
+            img_id = "sample_id", 
+            draw_edges = TRUE, 
+            colPairName = "expansion_interaction_graph", 
+            coords = c("m.cx", "m.cy"),
+            nodes_first = FALSE, 
+            directed = FALSE,
+            edge_color_fix = "grey") + 
+    scale_color_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected) +
+    ggtitle("expansion interaction graph")
+```
+
+
+
+```{r}
+# delaunay interaction graph 
+plotSpatial(sce2[,sce2$sample_id == "Slide 3 ROI 2"], 
+            node_color_by = "pg_clusters_corrected", 
+            img_id = "sample_id", 
+            draw_edges = TRUE, 
+            colPairName = "delaunay_interaction_graph", 
+            coords = c("m.cx", "m.cy"),
+            nodes_first = FALSE,
+            edge_color_fix = "grey") + 
+    scale_color_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected) +
+    ggtitle("delaunay interaction graph")
+```
+
+
+
+Nodes can also be colored based on the cells’ expression levels (e.g., CD11c expression) and their size can be adjusted (e.g., based on measured cell area).
+```{r}
+plotSpatial(sce2[,sce2$sample_id == "Slide 3 ROI 2"], 
+            node_color_by = "CD11c-154Sm", 
+            assay_type = "exprs",
+            img_id = "sample_id", 
+            draw_edges = TRUE, 
+            colPairName = "knn_interaction_graph", 
+            coords = c("m.cx", "m.cy"),
+            nodes_first = FALSE, 
+            node_size_by = "s.area", 
+            directed = FALSE,
+            edge_color_fix = "grey") + 
+    scale_size_continuous(range = c(0.1, 2)) +
+    ggtitle("CD11c expression")
+
+
+```
+
+
+Finally, the plotSpatial function allows displaying all images at once. This visualization can be useful to quickly detect larger structures of interest.
+```{r}
+plotSpatial(sce2, 
+            node_color_by = "pg_clusters_corrected", 
+            img_id = "sample_id", 
+            coords = c("m.cx", "m.cy"),
+            node_size_fix = 0.5) + 
+    scale_color_manual(values = metadata(sce2)$color_vectors$pgclusters_corrected)
+```
+
+
+**Spatial community analysis (12.3)**
+
+
+
+
+**Cellular neighbourhood analysis (12.4)**
+The following section highlights the use of the imcRtools package to detect cellular neighborhoods. This approach has been proposed by (Goltsev et al. 2018) and (Schürch et al. 2020) to group cells based on information contained in their direct neighborhood.
+
+(Goltsev et al. 2018) perfomed Delaunay triangulation-based graph construction, neighborhood aggregation and then clustered cells. (Schürch et al. 2020) on the other hand constructed a 10-nearest neighbor graph before aggregating information across neighboring cells.
+
+In the following code chunk we will use the 20-nearest neighbor graph as constructed above to define the direct cellular neighborhood. The aggregateNeighbors function allows neighborhood aggregation in 2 different ways:
+
+For each cell the function computes the fraction of cells of a certain type (e.g., cell type) among its neighbors.
+For each cell it aggregates (e.g., mean) the expression counts across all neighboring cells.
+Based on these measures, cells can now be clustered into cellular neighborhoods. We will first compute the fraction of the different cell types among the 20-nearest neighbors and use kmeans clustering to group cells into 6 cellular neighborhoods.
+
+Of note: constructing a 20-nearest neighbor graph and clustering using kmeans with k=6 is only an example. Similar to the analysis done in Section 9.2.2, it is recommended to perform a parameter sweep across different graph construction algorithms and different parmaters k for kmeans clustering. Finding the best cellular neighbourhood (CN) detection settings is also subject to the question at hand. Constructing graphs with more neighbors usually results in larger CNs.
+
+```{r}
+# By Phenograph clusters
+sce2 <- aggregateNeighbors(sce2, colPairName = "knn_interaction_graph", 
+                          aggregate_by = "metadata", count_by = "pg_clusters_corrected")
+
+set.seed(220705)
+
+cn_1 <- kmeans(sce2$aggregatedNeighbors, centers = 6)
+sce2$cn_pgclusterscorrected <- as.factor(cn_1$cluster)
+
+plotSpatial(sce2, 
+            node_color_by = "cn_pgclusterscorrected", 
+            img_id = "sample_id", 
+            coords = c("m.cx", "m.cy"),
+            node_size_fix = 0.5) +
+    scale_color_brewer(palette = "Set3")
+```
+
+The next code chunk visualizes the cell type compositions of the detected cellular neighborhoods (CN).
+```{r}
+library(tidyverse)
+library(pheatmap)
+for_plot <- prop.table(table(sce2$cn_pgclusterscorrected, sce2$pg_clusters_corrected), 
+                  margin = 1)
+
+pheatmap(for_plot, color = colorRampPalette(c("dark blue", "white", "dark red"))(100), 
+         scale = "column")
+```
+
+
+We will now detect cellular neighborhoods by computing the mean expression across the 20-nearest neighbor prior to kmeans clustering (k=6).
+```{r}
+# By expression
+sce2 <- aggregateNeighbors(sce2, colPairName = "knn_interaction_graph", 
+                          aggregate_by = "expression", assay_type = "exprs",
+                          subset_row = rowData(sce2)$use_channel)
+cn_2 <- kmeans(sce2$mean_aggregatedExpression, centers = 6)
+sce2$cn_expression <- as.factor(cn_2$cluster)
+
+plotSpatial(sce2, 
+            node_color_by = "cn_expression", 
+            img_id = "sample_id", 
+            coords = c("m.cx", "m.cy"),
+            node_size_fix = 0.5) +
+    scale_color_brewer(palette = "Set3")
+```
+
+
+Also here, we can visualize the cell type composition of each cellular neighborhood.
+```{r}
+for_plot <- prop.table(table(sce2$cn_expression, sce2$pg_clusters_corrected), 
+                  margin = 1)
+
+pheatmap(for_plot, color = colorRampPalette(c("dark blue", "white", "dark red"))(100), 
+         scale = "column")
+```
+
+
+
+An alternative to the aggregateNeighbors function is provided by the lisaClust Bioconductor package (Patrick et al. 2021). In contrast to imcRtools, the lisaClust package computes local indicators of spatial associations (LISA) functions and clusters cells based on those. More precise, the package summarizes L-functions from a Poisson point process model to derive numeric vectors for each cell which can then again be clustered using kmeans.
+
+The lisa function requires a SegmentedCells object which can be generated using the spicyR package.
+
+
+
+
+
+**Interaction analysis (12.7)**
+The next section focuses on statistically testing the pairwise interaction between all cell types of the dataset. For this, the imcRtools package provides the testInteractions function which implements the interaction testing strategy proposed by (Schapiro et al. 2017).
+
+Per grouping level (e.g., image), the testInteractions function computes the averaged cell type/cell type interaction count and computes this count against an empirical null distribution which is generated by permuting all cell labels (while maintaining the tissue structure).
+
+In the following example, we use the steinbock or knn generated spatial interaction graph and estimate the interaction or avoidance between cell types in the dataset.
+
+```{r}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("imcRtools")
+```
+
+
+```{r}
+if (!requireNamespace("remotes", quietly = TRUE))
+    install.packages("remotes")
+
+remotes::install_github("BodenmillerGroup/imcRtools")
+```
+
+
+The returned DataFrame contains the test results per grouping level (in this case the image ID, group_by), “from” cell type (from_label) and “to” cell type (to_label). The sigval entry indicates if a pair of cell types is significantly interacting (sigval = 1), if a pair of cell types is significantly avoiding (sigval = -1) or if no significant interaction or avoidance was detected.
+```{r}
+library(scales)
+out <- testInteractions(sce2, 
+                        group_by = "sample_id",
+                        label = "pg_clusters_corrected", 
+                        colPairName = "knn_interaction_graph")
+
+head(out)
+```
+
+
+These results can be visualized by computing the sum of the sigval entries across all images:
+```{r}
+out %>% as_tibble() %>%
+    group_by(from_label, to_label) %>%
+    summarize(sum_sigval = sum(sigval, na.rm = TRUE)) %>%
+    ggplot() +
+        geom_tile(aes(from_label, to_label, fill = sum_sigval)) +
+        scale_fill_gradient2(low = muted("blue"), mid = "white", high = muted("red")) +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+```{r}
+out %>% as_tibble() %>%
+    group_by(from_label, to_label) %>%
+    summarize(sum_sigval = sum(sigval, na.rm = TRUE)) %>%
+    ggplot() +
+        geom_tile(aes(x=factor(from_label,levels = c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15)), y=factor(to_label,levels = c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15)), fill = sum_sigval)) +
+        scale_fill_gradient2(low = muted("blue"), mid = "white", high = muted("red")) +
+        labs(x="PhenoGraph clusters of interest",y="PhenoGraph clusters in neighbourhood")
+```
+
+
+
+
